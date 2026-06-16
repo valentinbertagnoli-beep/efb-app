@@ -125,6 +125,9 @@
   #navpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:60;border-radius:18px;padding:14px 16px;
     box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#11314a,#0e2336);border:1px solid var(--accent2);}
   #navpop .t{flex:1;} #navpop .t b{display:block;font-size:13px;letter-spacing:.5px;color:var(--accent);} #navpop .t span{font-size:15px;font-weight:700;}
+  #alertpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:65;border-radius:18px;padding:14px 16px;
+    box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#3a1414,#2a0d0d);border:1px solid var(--danger);}
+  #alertpop .t{flex:1;} #alertpop .t b{display:block;font-size:13px;letter-spacing:.5px;color:var(--danger);} #alertpop .t span{font-size:15px;font-weight:700;}
   .leg{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;}
   .leg .lh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
   .leg .lh b{color:var(--accent2);font-size:14px;}
@@ -186,6 +189,11 @@
   <div style="font-size:26px">&#129517;</div>
   <div class="t"><b>POINT TOURNANT</b><span id="navpopTxt">—</span></div>
   <button class="btn accent" style="width:auto;padding:12px 16px;min-height:48px" id="navpopOk">OK</button>
+</div>
+<div id="alertpop" class="hide">
+  <div style="font-size:26px">&#9888;</div>
+  <div class="t"><b id="alertpopTitle">ALERTE</b><span id="alertpopTxt">—</span></div>
+  <button class="btn danger" style="width:auto;padding:12px 16px;min-height:48px" id="alertpopOk">OK</button>
 </div>
 <div id="pdfview" class="hide">
   <div class="pdfbar">
@@ -408,7 +416,7 @@ function defaultState(){
     meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"" },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ surface:"Sèche/Dur", qfu:"10", toda:"", lda:"", mode:"estim", manTO:"", manLDG:"" },
-    fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false },
+    fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
     chrono:{ running:false, startTs:null, accMs:0 },
     compteur:{ entree:"", sortie:"" },
     navlog:[],
@@ -586,7 +594,8 @@ function renderWB(){
       <button class="btn ${state.chrono.running?'danger':'primary'}" id="chBtn">${state.chrono.running?'Pause':'Démarrer'}</button>
       <button class="btn ghost" id="chReset">Réinitialiser</button>
     </div>
-    <div class="note" style="margin-top:8px">Démarré au début du vol ; sert de base de temps à la gestion carburant.</div></div>
+    <div class="note" style="margin-top:8px">Démarré au début du vol ; sert de base de temps à la gestion carburant.</div>
+    <button class="btn ghost" id="notifBtn" style="margin-top:8px">🔔 Activer les notifications</button></div>
   <div class="card"><h2>Gestion carburant en vol</h2>
     <div class="note" style="margin-bottom:8px">Décollage sur le plus plein, conso ${P().fuelMgmtRate} L/h. Alerte quand un réservoir tombe à la moitié de l'autre.</div>
     <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
@@ -601,6 +610,7 @@ function renderWB(){
   document.getElementById("fmBtn").onclick=toggleFuelMgmt;
   document.getElementById("chBtn").onclick=chronoToggle;
   document.getElementById("chReset").onclick=chronoReset;
+  const nb=document.getElementById("notifBtn"); if(nb){ nb.onclick=reqNotif; if(("Notification" in window)&&Notification.permission==="granted") nb.textContent="🔔 Notifications activées"; }
   updateFuelMgmtDisplay();
 }
 function seatBtn(id,label,val,unit){
@@ -682,7 +692,7 @@ document.getElementById("kpOk").onclick=()=>{
 
 /* ---- CHRONOMÈTRE ---- */
 function chronoElapsedMs(){ const c=state.chrono; return (c.accMs||0)+((c.running&&c.startTs)?Date.now()-c.startTs:0); }
-function chronoToggle(){ const c=state.chrono; if(c.running){ c.accMs=(c.accMs||0)+(Date.now()-c.startTs); c.running=false; c.startTs=null; } else { c.running=true; c.startTs=Date.now(); } saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
+function chronoToggle(){ const c=state.chrono; if(c.running){ c.accMs=(c.accMs||0)+(Date.now()-c.startTs); c.running=false; c.startTs=null; relWake(); } else { c.running=true; c.startTs=Date.now(); reqNotif(); reqWake(); } saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
 function chronoReset(){ const c=state.chrono; c.running=false; c.startTs=null; c.accMs=0; state.fuelMgmt.lastChronoMs=0; saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
 function fmtHMS(ms){ ms=Math.max(0,ms|0); let s=Math.floor(ms/1000),h=Math.floor(s/3600); s-=h*3600; let m=Math.floor(s/60); s-=m*60; const p=n=>String(n).padStart(2,'0'); return (h>0?h+':'+p(m):m)+':'+p(s); }
 function updateChronoChip(){ const t=fmtHMS(chronoElapsedMs()); const el=document.getElementById('chrono'); if(el){ el.textContent='\u23F1 '+t; el.classList.toggle('run',!!state.chrono.running); } const w=document.getElementById('wbChrono'); if(w) w.textContent=t; }
@@ -693,7 +703,7 @@ function toggleFuelMgmt(){
   const m=state.fuelMgmt;
   if(m.active){ m.active=false; saveState(); renderWB(); return; }
   const i=wbInputs();
-  m.active=true; m.left=i.fuelLeft; m.right=i.fuelRight; m.sel=fullerTank(); m.lastChronoMs=chronoElapsedMs(); m.prompted=false;
+  m.active=true; m.left=i.fuelLeft; m.right=i.fuelRight; m.sel=fullerTank(); m.lastChronoMs=chronoElapsedMs(); m.prompted=false; m.lowPrompted=false;
   if(!state.chrono.running) chronoToggle();
   saveState(); renderWB();
 }
@@ -706,6 +716,8 @@ function fuelTick(){
   if(m.sel==="left") m.left=Math.max(0,(m.left||0)-burn); else m.right=Math.max(0,(m.right||0)-burn);
   const sv=m.sel==="left"?m.left:m.right, ov=m.sel==="left"?m.right:m.left;
   if(!m.prompted && (sv<=ov/2 || sv<=0)){ m.prompted=true; saveState(); showFuelPop(); }
+  const tot=(m.left||0)+(m.right||0);
+  if(!m.lowPrompted && tot<20){ m.lowPrompted=true; saveState(); alertBanner("CARBURANT BAS","Total carburant < 20 L ("+fmt(tot)+" L restant)"); }
   saveState();
   if(currentTab==="wb") updateFuelMgmtDisplay();
 }
@@ -720,7 +732,7 @@ const fuelpop=document.getElementById("fuelpop");
 function showFuelPop(){
   const m=state.fuelMgmt, other=m.sel==="left"?"DROIT":"GAUCHE";
   document.getElementById("fuelpopTxt").textContent="Passez sur le réservoir "+other;
-  fuelpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]);
+  fuelpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]); sysNotify("Carburant","Passez sur le réservoir "+other);
 }
 document.getElementById("fuelpopOk").onclick=()=>{
   const m=state.fuelMgmt; m.sel=m.sel==="left"?"right":"left"; m.prompted=false; m.lastChronoMs=chronoElapsedMs();
@@ -854,9 +866,9 @@ function toggleGPS(){
   if(!navigator.geolocation){ alert("Géolocalisation non disponible."); return; }
   navTriggered={};
   gpsWatch=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
-  gpsActive=true; render();
+  gpsActive=true; reqNotif(); reqWake(); render();
 }
-function stopGPS(){ if(gpsWatch!=null) navigator.geolocation.clearWatch(gpsWatch); gpsActive=false; gpsWatch=null; if(currentTab==='chk'||currentTab==='nav') render(); }
+function stopGPS(){ if(gpsWatch!=null) navigator.geolocation.clearWatch(gpsWatch); gpsActive=false; gpsWatch=null; relWake(); if(currentTab==='chk'||currentTab==='nav') render(); }
 function onGPSErr(e){ const el=document.getElementById("gpsState"); if(el) el.textContent="erreur"; }
 function onGPS(pos){
   const c=pos.coords, gsKt=(c.speed!=null&&isFinite(c.speed))?c.speed*1.94384:null;
@@ -893,14 +905,29 @@ function beep(){ try{ const ac=new (window.AudioContext||window.webkitAudioConte
   g.gain.setValueAtTime(.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(.25,ac.currentTime+.02);
   g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.35); o.start(); o.stop(ac.currentTime+.36); }catch(e){} }
 function popupChecklist(phaseId,label){ pendingPhase=phaseId; document.getElementById("gpspopTxt").textContent=label;
-  gpspop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate(120); }
+  gpspop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate(120); sysNotify("Checklist",label); }
 document.getElementById("gpspopOpen").onclick=()=>{ gpspop.classList.add("hide");
   if(pendingPhase){ chkPhase=pendingPhase; currentTab="chk";
     document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab==="chk")); render(); } };
 document.getElementById("gpspopHide").onclick=()=>gpspop.classList.add("hide");
 const navpop=document.getElementById("navpop");
-function navPopup(title,sub){ document.getElementById("navpopTxt").textContent=title+' — '+sub; navpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate(120); }
+function navPopup(title,sub){ document.getElementById("navpopTxt").textContent=title+' — '+sub; navpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate(120); sysNotify(title,sub); }
 document.getElementById("navpopOk").onclick=()=>navpop.classList.add("hide");
+/* ---- NOTIFICATIONS / ALERTES / WAKE LOCK ---- */
+function reqNotif(){ try{ if('Notification' in window && Notification.permission==='default'){ Notification.requestPermission(); } }catch(e){} }
+function sysNotify(title,body){ try{
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  if(navigator.serviceWorker && navigator.serviceWorker.ready){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body:body,tag:'envol',renotify:true})).catch(()=>{ try{ new Notification(title,{body:body}); }catch(e){} });
+  } else { new Notification(title,{body:body}); }
+}catch(e){} }
+const alertpop=document.getElementById("alertpop");
+function alertBanner(title,msg){ document.getElementById("alertpopTitle").textContent=title; document.getElementById("alertpopTxt").textContent=msg;
+  alertpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([250,90,250]); sysNotify(title,msg); }
+document.getElementById("alertpopOk").onclick=()=>alertpop.classList.add("hide");
+let wakeLock=null;
+async function reqWake(){ try{ if('wakeLock' in navigator && (state.chrono.running||gpsActive) && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
+function relWake(){ try{ if(wakeLock && !state.chrono.running && !gpsActive){ wakeLock.release(); wakeLock=null; } }catch(e){} }
 /* ---- PLAN DE VOL ---- */
 function renderNav(){
   const nl=state.navlog||[];
@@ -1045,6 +1072,7 @@ updateChronoChip();
 function appTick(){ updateChronoChip(); fuelTick(); if(currentTab==='nav') updateNavGps(); }
 setInterval(appTick,1000);
 window.addEventListener("orientationchange",()=>setTimeout(render,250));
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ updateChronoChip(); fuelTick(); reqWake(); } });
 </script>
 </body>
 </html>
