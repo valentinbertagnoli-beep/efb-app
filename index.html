@@ -120,6 +120,16 @@
   .chrono{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;min-height:40px;
     font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;}
   .chrono.run{border-color:var(--accent);color:var(--accent);background:#0f2417;}
+  .phase-badge{display:inline-block;padding:6px 16px;border-radius:999px;font-weight:800;font-size:14px;letter-spacing:1px;}
+  .phase-badge.sol{background:#22303c;color:var(--accent2);border:1px solid var(--accent2);}
+  .phase-badge.vol{background:#0f2417;color:var(--accent);border:1px solid var(--accent);}
+  .phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .phbtn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 8px;min-height:58px;font-weight:800;font-size:14px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
+  .phbtn small{font-size:12px;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;}
+  .phbtn.set{border-color:var(--accent);background:#0f2417;color:var(--accent);}
+  .phbtn.set small{color:var(--accent);}
+  .phbtn.next{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(96,165,250,.2);}
+  .phbtn.dis{opacity:.4;}
   .acft-sel{flex-wrap:wrap;justify-content:flex-end;}
   #acftSelect{max-width:118px;}
   #navpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:60;border-radius:18px;padding:14px 16px;
@@ -435,13 +445,13 @@ function defaultState(){
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ surface:"Sèche/Dur", qfu:"10", toda:"", lda:"", mode:"estim", manTO:"", manLDG:"", icao:"", rwy:"" },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
-    chrono:{ running:false, startTs:null, accMs:0 },
+    chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
     compteur:{ entree:"", sortie:"" },
     navlog:[],
     chk:{}, sig:null, pic:"" };
 }
 let state=loadState();
-function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft) return Object.assign(defaultState(),s);}catch(e){} return defaultState(); }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; return st; }}catch(e){} return defaultState(); }
 function saveState(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(state)); }catch(e){} }
 function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
@@ -664,13 +674,20 @@ function renderWB(){
   <div class="card"><h2>Enveloppe de centrage</h2>${envelopeSVG(r)}
     <div class="note" style="margin-top:8px"><span style="color:var(--accent2)">ZFW</span> &nbsp; <span style="color:var(--accent)">Décollage</span></div></div>
   <div class="card"><h2>Chronomètre de vol</h2>
-    <div style="text-align:center"><div class="big" id="wbChrono" style="font-size:40px">${fmtHMS(chronoElapsedMs())}</div></div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn ${state.chrono.running?'danger':'primary'}" id="chBtn">${state.chrono.running?'Pause':'Démarrer'}</button>
-      <button class="btn ghost" id="chReset">Réinitialiser</button>
+    <div style="text-align:center;margin-bottom:8px"><span class="phase-badge ${inFlight()?'vol':'sol'}" id="phaseBadge">${inFlight()?'EN VOL':'AU SOL'}</span></div>
+    <div class="phase-grid">
+      <button class="phbtn ${state.chrono.offBlock?'set':''} ${!state.chrono.offBlock?'next':''}" id="phOff">Off-block<small>${hhmmUTC(state.chrono.offBlock)}</small></button>
+      <button class="phbtn ${state.chrono.takeOff?'set':''} ${(state.chrono.offBlock&&!state.chrono.takeOff)?'next':''} ${!state.chrono.offBlock?'dis':''}" id="phTO">Décollage<small>${hhmmUTC(state.chrono.takeOff)}</small></button>
+      <button class="phbtn ${state.chrono.landing?'set':''} ${(state.chrono.takeOff&&!state.chrono.landing)?'next':''} ${!state.chrono.takeOff?'dis':''}" id="phLD">Atterrissage<small>${hhmmUTC(state.chrono.landing)}</small></button>
+      <button class="phbtn ${state.chrono.onBlock?'set':''} ${(state.chrono.landing&&!state.chrono.onBlock)?'next':''} ${!state.chrono.landing?'dis':''}" id="phOn">On-block<small>${hhmmUTC(state.chrono.onBlock)}</small></button>
     </div>
-    <div class="note" style="margin-top:8px">Démarré au début du vol ; sert de base de temps à la gestion carburant.</div>
-    <button class="btn ghost" id="notifBtn" style="margin-top:8px">🔔 Activer les notifications</button></div>
+    <div class="kv" style="margin-top:10px"><span class="k">Temps bloc (off→on)</span><span class="v" id="wbBlock">${fmtHMS(chBlockMs())}</span></div>
+    <div class="kv"><span class="k">Temps de vol (déco→atterro)</span><span class="v" id="wbAir">${fmtHMS(chAirMs())}</span></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost" id="chReset">Réinitialiser</button>
+      <button class="btn ghost" id="notifBtn">🔔 Notifications</button>
+    </div>
+    <div class="note" style="margin-top:8px">Le temps bloc alimente l'horamètre (compteur sortie) et sert de base à la gestion carburant.</div></div>
   <div class="card"><h2>Gestion carburant en vol</h2>
     <div class="note" style="margin-bottom:8px">Décollage sur le plus plein, conso ${P().fuelMgmtRate} L/h. Alerte quand un réservoir tombe à la moitié de l'autre.</div>
     <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
@@ -683,7 +700,10 @@ function renderWB(){
   bindInput("emptyMass",v=>state.wb.emptyMass=v,true);
   bindInput("emptyArm",v=>state.wb.emptyArm=v,true);
   document.getElementById("fmBtn").onclick=toggleFuelMgmt;
-  document.getElementById("chBtn").onclick=chronoToggle;
+  document.getElementById("phOff").onclick=()=>chPhaseStamp('offBlock');
+  document.getElementById("phTO").onclick=()=>chPhaseStamp('takeOff');
+  document.getElementById("phLD").onclick=()=>chPhaseStamp('landing');
+  document.getElementById("phOn").onclick=()=>chPhaseStamp('onBlock');
   document.getElementById("chReset").onclick=chronoReset;
   const nb=document.getElementById("notifBtn"); if(nb){ nb.onclick=reqNotif; if(("Notification" in window)&&Notification.permission==="granted") nb.textContent="🔔 Notifications activées"; }
   updateFuelMgmtDisplay();
@@ -766,11 +786,23 @@ document.getElementById("kpOk").onclick=()=>{
 };
 
 /* ---- CHRONOMÈTRE ---- */
-function chronoElapsedMs(){ const c=state.chrono; return (c.accMs||0)+((c.running&&c.startTs)?Date.now()-c.startTs:0); }
-function chronoToggle(){ const c=state.chrono; if(c.running){ c.accMs=(c.accMs||0)+(Date.now()-c.startTs); c.running=false; c.startTs=null; relWake(); } else { c.running=true; c.startTs=Date.now(); reqNotif(); reqWake(); } saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
-function chronoReset(){ const c=state.chrono; c.running=false; c.startTs=null; c.accMs=0; state.fuelMgmt.lastChronoMs=0; saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
+function chBlockMs(){ const c=state.chrono; return c.offBlock?((c.onBlock||Date.now())-c.offBlock):0; }
+function chAirMs(){ const c=state.chrono; return c.takeOff?((c.landing||Date.now())-c.takeOff):0; }
+function inFlight(){ const c=state.chrono; return !!(c.takeOff&&!c.landing); }
+function chronoRunning(){ const c=state.chrono; return !!(c.offBlock&&!c.onBlock); }
+function chronoElapsedMs(){ return chBlockMs(); }
+function hhmmUTC(ts){ if(!ts) return '—'; return new Date(ts).toISOString().slice(11,16)+'Z'; }
+function applyBlockToCompteur(){ const e=parseFloat(state.compteur.entree); if(isFinite(e)){ const h=chBlockMs()/3600000; state.compteur.sortie=(e+h).toFixed(2); if(typeof updCpt==='function') updCpt(); } }
+function chPhaseStamp(field){ const c=state.chrono;
+  if(field==='offBlock'){ if(c.offBlock) return; c.offBlock=Date.now(); reqNotif(); reqWake(); }
+  else if(field==='takeOff'){ if(!c.offBlock||c.takeOff) return; c.takeOff=Date.now(); }
+  else if(field==='landing'){ if(!c.takeOff||c.landing) return; c.landing=Date.now(); }
+  else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); relWake(); }
+  saveState(); updateChronoChip(); if(currentTab==='wb') renderWB();
+}
+function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
 function fmtHMS(ms){ ms=Math.max(0,ms|0); let s=Math.floor(ms/1000),h=Math.floor(s/3600); s-=h*3600; let m=Math.floor(s/60); s-=m*60; const p=n=>String(n).padStart(2,'0'); return (h>0?h+':'+p(m):m)+':'+p(s); }
-function updateChronoChip(){ const t=fmtHMS(chronoElapsedMs()); const el=document.getElementById('chrono'); if(el){ el.textContent='\u23F1 '+t; el.classList.toggle('run',!!state.chrono.running); } const w=document.getElementById('wbChrono'); if(w) w.textContent=t; }
+function updateChronoChip(){ const fl=inFlight(); const ms=fl?chAirMs():chBlockMs(); const el=document.getElementById('chrono'); if(el){ el.textContent=(fl?'\u25B2 ':'\u23F1 ')+fmtHMS(ms); el.classList.toggle('run', chronoRunning()||fl); } const b=document.getElementById('wbBlock'); if(b) b.textContent=fmtHMS(chBlockMs()); const a=document.getElementById('wbAir'); if(a) a.textContent=fmtHMS(chAirMs()); const pb=document.getElementById('phaseBadge'); if(pb){ pb.textContent=fl?'EN VOL':'AU SOL'; pb.className='phase-badge '+(fl?'vol':'sol'); } }
 
 /* ---- GESTION CARBURANT ---- */
 function fullerTank(){ const i=wbInputs(); return i.fuelLeft>=i.fuelRight?"left":"right"; }
@@ -779,7 +811,7 @@ function toggleFuelMgmt(){
   if(m.active){ m.active=false; saveState(); renderWB(); return; }
   const i=wbInputs();
   m.active=true; m.left=i.fuelLeft; m.right=i.fuelRight; m.sel=fullerTank(); m.lastChronoMs=chronoElapsedMs(); m.prompted=false; m.lowPrompted=false;
-  if(!state.chrono.running) chronoToggle();
+  if(!state.chrono.offBlock){ state.chrono.offBlock=Date.now(); reqNotif(); reqWake(); }
   saveState(); renderWB();
 }
 function fuelTick(){
@@ -1013,8 +1045,8 @@ function alertBanner(title,msg){ document.getElementById("alertpopTitle").textCo
   alertpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([250,90,250]); sysNotify(title,msg); }
 document.getElementById("alertpopOk").onclick=()=>alertpop.classList.add("hide");
 let wakeLock=null;
-async function reqWake(){ try{ if('wakeLock' in navigator && (state.chrono.running||gpsActive) && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
-function relWake(){ try{ if(wakeLock && !state.chrono.running && !gpsActive){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+async function reqWake(){ try{ if('wakeLock' in navigator && (chronoRunning()||gpsActive) && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
+function relWake(){ try{ if(wakeLock && !chronoRunning() && !gpsActive){ wakeLock.release(); wakeLock=null; } }catch(e){} }
 /* ---- PLAN DE VOL ---- */
 /* ---- VAC (SIA, Licence Ouverte) ---- */
 function airacFolder(d){
@@ -1029,14 +1061,18 @@ function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('envo
 async function vacSave(icao,blob){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('vac','readwrite'); tx.objectStore('vac').put(blob,icao.toUpperCase()); tx.oncomplete=()=>res(1); tx.onerror=()=>rej(tx.error); }); }
 async function vacGet(icao){ const db=await idbOpen(); return new Promise((res)=>{ const tx=db.transaction('vac','readonly'); const rq=tx.objectStore('vac').get(icao.toUpperCase()); rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null); }); }
 async function vacDelete(icao){ const db=await idbOpen(); return new Promise((res)=>{ const tx=db.transaction('vac','readwrite'); tx.objectStore('vac').delete(icao.toUpperCase()); tx.oncomplete=()=>res(1); tx.onerror=()=>res(0); }); }
-async function vacShow(icao){
+let vacCache={};
+function vacShow(icao){
   icao=(icao||'').toUpperCase().trim(); if(icao.length<4){ alert('Code OACI invalide'); return; }
-  document.getElementById('vacBrowser').href=vacURL(icao);
-  document.getElementById('vacTitle').textContent='VAC '+icao;
-  const fr=document.getElementById('vacFrame');
-  let blob=null; try{ blob=await vacGet(icao); }catch(e){}
-  fr.src = blob ? URL.createObjectURL(blob) : vacURL(icao);
-  document.getElementById('vacview').classList.remove('hide');
+  const url=vacURL(icao);
+  if(vacCache[icao]){
+    document.getElementById('vacBrowser').href=url;
+    document.getElementById('vacTitle').textContent='VAC '+icao;
+    document.getElementById('vacview').classList.remove('hide');
+    vacGet(icao).then(b=>{ if(b) document.getElementById('vacFrame').src=URL.createObjectURL(b); }).catch(()=>{});
+  } else {
+    window.open(url,'_blank');
+  }
 }
 async function vacDownload(icao){
   icao=(icao||'').toUpperCase().trim(); const st=document.getElementById('vacStatus');
@@ -1046,13 +1082,14 @@ async function vacDownload(icao){
   try{ const r=await fetch(url); if(r.ok) buf=await r.arrayBuffer(); }catch(e){}
   if(!buf){ try{ const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(url)); if(r.ok) buf=await r.arrayBuffer(); }catch(e){} }
   if(!buf || buf.byteLength<1200){ if(st) st.innerHTML='<span class="pill warn">\u00c9chec \u2014 ouvre dans le navigateur, ou v\u00e9rifie le code/cycle</span>'; return; }
-  try{ await vacSave(icao,new Blob([buf],{type:'application/pdf'})); if(st) st.innerHTML='<span class="pill ok">VAC '+esc(icao)+' enregistr\u00e9e hors-ligne</span>'; }catch(e){ if(st) st.innerHTML='<span class="pill warn">Erreur de stockage</span>'; }
+  try{ await vacSave(icao,new Blob([buf],{type:'application/pdf'})); vacCache[icao]=true; if(st) st.innerHTML='<span class="pill ok">VAC '+esc(icao)+' enregistr\u00e9e hors-ligne</span>'; }catch(e){ if(st) st.innerHTML='<span class="pill warn">Erreur de stockage</span>'; }
 }
 function vacCard(defIcao){
   const folder=airacFolder(new Date()).replace('eAIP_','').replace(/_/g,' ');
   return '<div class="card"><h2>Carte VAC</h2>'
     +'<label class="fld">A\u00e9rodrome (OACI)<input id="vacIcao" value="'+esc(defIcao||'')+'" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="LFPA"></label>'
     +'<div class="row" style="margin-top:8px"><button class="btn accent" id="vacOpen">Afficher la VAC</button><button class="btn ghost" id="vacDl">T\u00e9l\u00e9charger hors-ligne</button></div>'
+    +'<div class="kv" style="margin-top:8px"><span class="k">Phase</span><span class="v">'+(inFlight()?'EN VOL — carte d\'approche':'AU SOL — plan d\'aérodrome')+'</span></div>'
     +'<div id="vacStatus" class="note" style="margin-top:8px"></div>'
     +'<div class="note" style="margin-top:6px">La VAC officielle contient le plan d\'a\u00e9rodrome (sol) et la carte d\'approche \u00e0 vue. Source : SIA \u2014 cycle '+folder+' \u00b7 Licence Ouverte.</div></div>';
 }
@@ -1063,7 +1100,7 @@ function bindVac(){
   document.getElementById('vacDl').onclick=()=>vacDownload(ic.value);
   vacStatusInit(ic.value);
 }
-async function vacStatusInit(icao){ const st=document.getElementById('vacStatus'); if(!st) return; icao=(icao||'').toUpperCase().trim(); if(icao.length<4){ st.innerHTML=''; return; } let b=null; try{b=await vacGet(icao);}catch(e){} st.innerHTML=b?'<span class="pill ok">Disponible hors-ligne</span>':''; }
+async function vacStatusInit(icao){ const st=document.getElementById('vacStatus'); if(!st) return; icao=(icao||'').toUpperCase().trim(); if(icao.length<4){ st.innerHTML=''; return; } let b=null; try{b=await vacGet(icao);}catch(e){} vacCache[icao]=!!b; st.innerHTML=b?'<span class="pill ok">Disponible hors-ligne</span>':''; }
 
 function renderNav(){
 
@@ -1170,7 +1207,7 @@ function exportPDF(){
   h+='<h3>Conditions / route</h3><div class="box mono">Route : '+esc(state.meteo.dep||'\u2014')+' \u2192 '+esc(state.meteo.arr||'\u2014')
     +'\nVent '+esc(state.meteo.windDir)+'\u00b0 / '+esc(state.meteo.windSpd)+' kt \u2014 '+esc(state.meteo.temp)+' \u00b0C \u2014 QNH '+esc(state.meteo.qnh)+' hPa</div>';
   if(navRows) h+='<h3>Plan de vol</h3><table><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Temps</th><th>Obs.</th></tr>'+navRows+'</table>';
-  h+='<h3>Compteur &amp; temps</h3><div class="box">Compteur entr\u00e9e : <b>'+esc(state.compteur.entree||'\u2014')+'</b> \u00b7 sortie : <b>'+esc(state.compteur.sortie||'\u2014')+'</b> \u00b7 temps compteur : <b>'+cdelta+'</b><br>Chronom\u00e8tre de vol : <b>'+fmtHMS(chronoElapsedMs())+'</b></div>';
+  h+='<h3>Compteur &amp; temps</h3><div class="box">Compteur entr\u00e9e : <b>'+esc(state.compteur.entree||'\u2014')+'</b> \u00b7 sortie : <b>'+esc(state.compteur.sortie||'\u2014')+'</b> \u00b7 temps compteur : <b>'+cdelta+'</b><br>Temps bloc : <b>'+fmtHMS(chBlockMs())+'</b> · Temps de vol : <b>'+fmtHMS(chAirMs())+'</b></div>';
   h+='<div class="box">Checklists normales compl\u00e9t\u00e9es : <b class="'+(chkDone?'ok':'bad')+'">'+(chkDone?'OUI':'NON')+'</b></div>';
   h+='<h3>Signature du commandant de bord</h3>'+(state.sig?'<img src="'+state.sig+'" class="sig" style="object-fit:contain">':'<div class="sig"></div>')
     +'<p>Sign\u00e9 \u00e9lectroniquement par le PIC <b>'+esc(state.pic||'(non renseign\u00e9)')+'</b> le <b>'+utc+'</b>.</p>';
@@ -1203,7 +1240,7 @@ function bindInput(id,fn,live,after){
 })();
 
 /* ---- DÉMARRAGE ---- */
-document.getElementById("chrono").onclick=chronoToggle;
+document.getElementById("chrono").onclick=()=>{ currentTab="wb"; render(); };
 document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
 document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacview").classList.add("hide"); document.getElementById("vacFrame").src="about:blank"; };
 document.getElementById("pdfPrint").onclick=()=>window.print();
