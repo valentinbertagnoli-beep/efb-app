@@ -120,6 +120,21 @@
   .chrono{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;min-height:40px;
     font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;}
   .chrono.run{border-color:var(--accent);color:var(--accent);background:#0f2417;}
+  .home-hero{display:flex;align-items:center;gap:14px;padding:14px 4px 10px;}
+  .home-title{font-size:26px;font-weight:800;letter-spacing:.5px;}
+  .home-title b{color:var(--accent);}
+  .home-sub{color:var(--muted);font-weight:700;font-size:13px;margin-top:2px;}
+  .home-status{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .hs-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:3px;cursor:pointer;border-left:4px solid var(--line);}
+  .hs-card.ok{border-left-color:var(--accent);} .hs-card.bad{border-left-color:var(--danger);}
+  .hs-card.vol{border-left-color:var(--accent);} .hs-card.sol{border-left-color:var(--accent2);}
+  .hs-k{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+  .hs-v{font-size:16px;font-weight:800;}
+  .hs-x{font-size:12px;color:var(--muted);font-weight:700;}
+  .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .home-btn{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 10px;font-weight:800;font-size:14px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;min-height:84px;justify-content:center;text-align:center;}
+  .home-btn:active{background:var(--panel2);}
+  .hb-ic{font-size:26px;}
   .phase-badge{display:inline-block;padding:6px 16px;border-radius:999px;font-weight:800;font-size:14px;letter-spacing:1px;}
   .phase-badge.sol{background:#22303c;color:var(--accent2);border:1px solid var(--accent2);}
   .phase-badge.vol{background:#0f2417;color:var(--accent);border:1px solid var(--accent);}
@@ -177,7 +192,7 @@
 <body>
 <div id="app">
   <header>
-    <div class="logo"><svg viewBox="0 0 100 100" width="30" height="30"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#3ddc97"/><circle cx="50" cy="88" r="6" fill="#3ddc97"/></svg><div>EnVol <b>EFB</b></div></div>
+    <div class="logo" id="homeBtn" style="cursor:pointer"><svg viewBox="0 0 100 100" width="30" height="30"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#3ddc97"/><circle cx="50" cy="88" r="6" fill="#3ddc97"/></svg><div>EnVol <b>EFB</b></div></div>
     <div class="acft-sel"><button id="chrono" class="chrono" title="Chronomètre de vol">&#9201; 0:00</button><span class="badge" id="immatBadge">F-GRLA</span>
       <select id="acftSelect" aria-label="Choix avion"></select></div>
   </header>
@@ -457,7 +472,7 @@ function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
 
 /* ===== ROUTAGE ===== */
-let currentTab="profil";
+let currentTab="home";
 const main=document.getElementById("main");
 document.querySelectorAll("#nav button").forEach(b=>{
   b.addEventListener("click",()=>{
@@ -545,13 +560,41 @@ function computePerf(){
 /* ===== RENDER ===== */
 function render(){
   lockPerfTab(!wbValid());
-  if(currentTab==="profil") renderProfil();
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab));
+  if(currentTab==="home") renderHome();
+  else if(currentTab==="profil") renderProfil();
   else if(currentTab==="wb") renderWB();
   else if(currentTab==="perf") renderPerf();
   else if(currentTab==="chk") renderChk();
   else if(currentTab==="nav") renderNav();
   else if(currentTab==="card") renderCard();
   main.scrollTop=0;
+}
+const ARROW_SVG='<svg viewBox="0 0 100 100" width="46" height="46"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#3ddc97"/><circle cx="50" cy="88" r="6" fill="#3ddc97"/></svg>';
+function renderHome(){
+  const p=P(), r=computeWB(), valid=wbValid(), fl=inFlight();
+  const dep=state.meteo.dep||'—', arr=state.meteo.arr||'—';
+  main.innerHTML=`
+  <div class="home-hero">
+    <div class="home-logo">${ARROW_SVG}</div>
+    <div class="home-htxt"><div class="home-title">EnVol <b>EFB</b></div><div class="home-sub">${esc(p.immat)} · ${esc(p.type)}</div></div>
+  </div>
+  <div class="home-status">
+    <div class="hs-card ${valid?'ok':'bad'}" data-go="wb"><span class="hs-k">Masse &amp; centrage</span><span class="hs-v">${valid?"Dans l'enveloppe":'Hors enveloppe'}</span><span class="hs-x">${fmt(r.mass)} kg au décollage</span></div>
+    <div class="hs-card" data-go="wb"><span class="hs-k">Carburant</span><span class="hs-v">${fmt(r.fuelL)} L</span><span class="hs-x">${state.fuelMgmt.active?'gestion active':'à bord'}</span></div>
+    <div class="hs-card ${fl?'vol':'sol'}" data-go="wb"><span class="hs-k">Phase</span><span class="hs-v">${fl?'EN VOL':'AU SOL'}</span><span class="hs-x">bloc ${fmtHMS(chBlockMs())}</span></div>
+    <div class="hs-card" data-go="profil"><span class="hs-k">Route</span><span class="hs-v">${esc(dep)} → ${esc(arr)}</span><span class="hs-x">QNH ${esc(state.meteo.qnh||'—')}</span></div>
+  </div>
+  <div class="home-grid">
+    <button class="home-btn" data-go="profil"><span class="hb-ic">&#128752;</span>Profil &amp; Météo</button>
+    <button class="home-btn" data-go="wb"><span class="hb-ic">&#9878;</span>Masse &amp; Centrage</button>
+    <button class="home-btn" data-go="perf"><span class="hb-ic">&#128200;</span>Performances</button>
+    <button class="home-btn" data-go="chk"><span class="hb-ic">&#10003;</span>Checklists</button>
+    <button class="home-btn" data-go="nav"><span class="hb-ic">&#129517;</span>Plan de vol</button>
+    <button class="home-btn" data-go="card"><span class="hb-ic">&#128221;</span>Datacard</button>
+  </div>
+  <div class="note" style="text-align:center;margin-top:14px">Aide à la décision — le commandant de bord reste responsable.</div>`;
+  main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ currentTab=el.dataset.go; render(); });
 }
 /* ---- PROFIL & MÉTÉO ---- */
 async function fetchWx(icao){
@@ -1241,6 +1284,7 @@ function bindInput(id,fn,live,after){
 
 /* ---- DÉMARRAGE ---- */
 document.getElementById("chrono").onclick=()=>{ currentTab="wb"; render(); };
+document.getElementById("homeBtn").onclick=()=>{ currentTab="home"; render(); };
 document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
 document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacview").classList.add("hide"); document.getElementById("vacFrame").src="about:blank"; };
 document.getElementById("pdfPrint").onclick=()=>window.print();
