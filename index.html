@@ -128,6 +128,7 @@
   #alertpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:65;border-radius:18px;padding:14px 16px;
     box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#3a1414,#2a0d0d);border:1px solid var(--danger);}
   #alertpop .t{flex:1;} #alertpop .t b{display:block;font-size:13px;letter-spacing:.5px;color:var(--danger);} #alertpop .t span{font-size:15px;font-weight:700;}
+  .mono{font-family:monospace;font-size:12.5px;color:#bfe0ff;white-space:pre-wrap;word-break:break-word;}
   .rwybtns{display:flex;flex-wrap:wrap;gap:8px;}
   .rwybtn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-height:50px;min-width:62px;font-weight:800;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;}
   .rwybtn small{font-size:11px;color:var(--muted);font-weight:700;}
@@ -140,6 +141,8 @@
   .leg label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);font-weight:700;}
   .leg input{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:46px;font-size:16px;font-weight:700;color:var(--ink);width:100%;}
   .leg .span2{grid-column:1/-1;}
+  #vacview{position:fixed;inset:0;z-index:80;background:#0a0e14;display:flex;flex-direction:column;}
+  .chk-item.ro{cursor:default;}
   #pdfview{position:fixed;inset:0;z-index:80;background:#0a0e14;display:flex;flex-direction:column;}
   #pdfview .pdfbar{display:flex;gap:10px;padding:calc(var(--safe-t) + 10px) 12px 10px;background:#0d131d;border-bottom:1px solid var(--line);}
   #pdfview .pdfbar .btn{min-height:50px;}
@@ -199,6 +202,14 @@
   <div style="font-size:26px">&#9888;</div>
   <div class="t"><b id="alertpopTitle">ALERTE</b><span id="alertpopTxt">—</span></div>
   <button class="btn danger" style="width:auto;padding:12px 16px;min-height:48px" id="alertpopOk">OK</button>
+</div>
+<div id="vacview" class="hide">
+  <div class="pdfbar">
+    <button class="btn ghost" id="vacBack">&#8592; Retour</button>
+    <b id="vacTitle" style="align-self:center;flex:1;text-align:center">VAC</b>
+    <a class="btn accent" id="vacBrowser" target="_blank" rel="noopener">Navigateur</a>
+  </div>
+  <iframe id="vacFrame" style="flex:1;border:0;background:#fff" referrerpolicy="no-referrer"></iframe>
 </div>
 <div id="pdfview" class="hide">
   <div class="pdfbar">
@@ -420,7 +431,7 @@ const LS_KEY="envol_efb_state_v2";
 function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
-    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"" },
+    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"" },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ surface:"Sèche/Dur", qfu:"10", toda:"", lda:"", mode:"estim", manTO:"", manLDG:"", icao:"", rwy:"" },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
@@ -533,7 +544,39 @@ function render(){
   main.scrollTop=0;
 }
 /* ---- PROFIL & MÉTÉO ---- */
+async function fetchWx(icao){
+  icao=(icao||'').toUpperCase().trim();
+  const base="https://aviationweather.gov/api/data/";
+  async function get(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw 0; return (await r.text()); }
+  async function tryBoth(path){
+    try{ const t=await get(base+path); if(t && t.trim()) return t.trim(); }catch(e){}
+    try{ const t=await get("https://api.allorigins.win/raw?url="+encodeURIComponent(base+path)); if(t && t.trim()) return t.trim(); }catch(e){}
+    return "";
+  }
+  const metarTxt=await tryBoth("metar?ids="+icao+"&format=raw&taf=false");
+  const tafTxt=await tryBoth("taf?ids="+icao+"&format=raw");
+  const metar=metarTxt?(metarTxt.split("\n").map(s=>s.trim()).find(s=>s.toUpperCase().startsWith(icao))||metarTxt.split("\n")[0].trim()):"";
+  return { metar:metar, taf:tafTxt };
+}
+function parseMetar(raw){ const o={}; let m;
+  m=raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b/); if(m){ o.windDir=m[1]==='VRB'?'':parseInt(m[1],10); o.windSpd=parseInt(m[2],10); }
+  m=raw.match(/\b(M?\d{2})\/(M?\d{2})\b/); if(m){ o.temp=parseInt(m[1].replace('M','-'),10); }
+  m=raw.match(/\bQ(\d{3,4})\b/); if(m){ o.qnh=parseInt(m[1],10); } else { m=raw.match(/\bA(\d{4})\b/); if(m){ o.qnh=Math.round(parseInt(m[1],10)/100*33.8639); } }
+  return o; }
+function applyMetar(o){ if(o.windDir!==undefined) state.meteo.windDir=o.windDir; if(o.windSpd!==undefined) state.meteo.windSpd=o.windSpd; if(o.temp!==undefined) state.meteo.temp=o.temp; if(o.qnh!==undefined) state.meteo.qnh=o.qnh; saveState(); }
+async function doWx(which){
+  const icao=((which==='dep')?state.meteo.dep:state.meteo.arr||'').trim().toUpperCase();
+  const st=document.getElementById('wxStatus');
+  if(icao.length<3){ if(st) st.innerHTML='<span class="pill warn">Saisir le code OACI</span>'; return; }
+  if(st) st.innerHTML='<span class="pill warn">Recherche '+esc(icao)+'\u2026</span>';
+  let wx; try{ wx=await fetchWx(icao); }catch(e){ wx={metar:'',taf:''}; }
+  if(!wx.metar && !wx.taf){ if(st) st.innerHTML='<span class="pill warn">Indisponible (hors-ligne / bloqu\u00e9) \u2014 colle le METAR ci-dessous</span>'; return; }
+  if(which==='dep'){ state.meteo.rawDep=wx.metar; state.meteo.tafDep=wx.taf; } else { state.meteo.rawArr=wx.metar; state.meteo.tafArr=wx.taf; }
+  if(wx.metar) applyMetar(parseMetar(wx.metar));
+  saveState(); renderProfil();
+}
 function renderProfil(){
+
   const p=P(),m=state.meteo,ad=p.aerodrome;
   main.innerHTML=`
   <div class="card"><h2>Avion</h2>
@@ -548,6 +591,20 @@ function renderProfil(){
     </div>
     <div class="kv" style="margin-top:8px"><span class="k">Départ</span><span class="v" id="depInfo">—</span></div>
     <div class="kv"><span class="k">Destination</span><span class="v" id="arrInfo">—</span></div></div>
+  <div class="card"><h2>Météo — METAR / TAF</h2>
+    <div class="row">
+      <button class="btn accent" id="wxDep">&#8595; METAR/TAF départ</button>
+      <button class="btn accent" id="wxArr">&#8595; METAR/TAF destination</button>
+    </div>
+    <div id="wxStatus" class="note" style="margin-top:8px"></div>
+    ${m.rawDep?`<h3>${esc(m.dep||'Départ')}</h3><div class="mono">${esc(m.rawDep)}</div>`:''}
+    ${m.tafDep?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafDep)}</div>`:''}
+    ${m.rawArr?`<h3>${esc(m.arr||'Destination')}</h3><div class="mono">${esc(m.rawArr)}</div>`:''}
+    ${m.tafArr?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafArr)}</div>`:''}
+    <h3>Coller un METAR (hors-ligne)</h3>
+    <textarea id="wxPaste" rows="2" placeholder="LFPA 121200Z 24008KT 9999 FEW040 18/09 Q1018" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--ink);font-family:monospace;font-size:13px"></textarea>
+    <button class="btn ghost" id="wxDecode" style="margin-top:8px">Décoder &#8594; vent / temp / QNH</button>
+    <div class="note" style="margin-top:6px">La récupération auto nécessite une connexion ; le décodage du coller marche hors-ligne.</div></div>
   <div class="card"><h2>Conditions météo (saisie manuelle)</h2>
     <div class="grid2">
       <label class="fld">Direction vent (°)<input id="windDir" inputmode="numeric" value="${esc(m.windDir)}" placeholder="—"></label>
@@ -564,6 +621,9 @@ function renderProfil(){
   bindInput("windSpd",v=>state.meteo.windSpd=v);
   bindInput("temp",v=>state.meteo.temp=v);
   bindInput("qnh",v=>state.meteo.qnh=v);
+  const wd=document.getElementById("wxDep"); if(wd) wd.onclick=()=>doWx('dep');
+  const wa=document.getElementById("wxArr"); if(wa) wa.onclick=()=>doWx('arr');
+  const wdec=document.getElementById("wxDecode"); if(wdec) wdec.onclick=()=>{ const v=(document.getElementById("wxPaste").value||'').trim(); if(v){ applyMetar(parseMetar(v)); state.meteo.rawDep=v.split("\n")[0]; saveState(); renderProfil(); } };
 }
 
 function updateRouteInfo(){ const f=(icao,id)=>{ const a=lookupAirport(icao); const el=document.getElementById(id); if(el) el.textContent=a?(a.n+' · '+(a.e!=null?a.e+' ft':'?')+' · '+a.r.length+' QFU'):'—'; }; f(state.meteo.dep,'depInfo'); f(state.meteo.arr,'arrInfo'); }
@@ -772,6 +832,7 @@ function renderPerf(){
     <div class="kv"><span class="k">Altitude</span><span class="v" id="pAptElev">—</span></div>
     <div class="note" style="margin:8px 0 4px">Choisir la piste → remplit QFU, longueur (TODA/LDA) et surface :</div>
     <div class="rwybtns" id="pRwys"></div></div>
+  ${vacCard(state.perf.icao)}
   <div class="card"><h2>Conditions retenues</h2>
     <div class="kv"><span class="k">OAT / QNH</span><span class="v">${r.oat} °C / ${r.qnh} hPa</span></div>
     <div class="kv"><span class="k">Alt. pression / densité</span><span class="v" id="pAlt">${r.pa} ft / ${r.da} ft</span></div>
@@ -815,6 +876,7 @@ function renderPerf(){
   pi.addEventListener('input',()=>{ state.perf.icao=pi.value.toUpperCase(); saveState(); refreshAptUI(); });
   pi.addEventListener('change',renderPerf);
   refreshAptUI();
+  bindVac();
   updatePerf();
 }
 function refreshAptUI(){
@@ -847,9 +909,7 @@ function renderChk(){
   const phase=allPhases().find(x=>x.id===chkPhase);
   const tabs=p.checklists.map(c=>`<button data-ph="${c.id}" class="${c.id===chkPhase?'on':''}">${c.title}</button>`).join("")
     +p.emergencies.map(c=>`<button data-ph="${c.id}" class="urg ${c.id===chkPhase?'on':''}">${c.title}</button>`).join("");
-  const realItems=phase.items.filter(it=>it.action!=="");
-  const done=Object.keys(state.chk[chkPhase]||{}).filter(k=>state.chk[chkPhase][k]).length;
-  const total=realItems.length, pct=total?Math.round(done/total*100):0;
+  const validated=!!(state.chk[chkPhase]&&state.chk[chkPhase].done);
   main.innerHTML=`
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
@@ -860,10 +920,8 @@ function renderChk(){
   <div class="card"><h2>Checklists — ${esc(phase.title)}</h2>
     <div class="chk-tabs">${tabs}</div>
     ${phase.info?`<div class="chk-info">${esc(phase.info)}</div>`:""}
-    <div class="kv"><span class="k">Progression</span><span class="v">${done}/${total} items</span></div>
-    <div class="progress"><i style="width:${pct}%"></i></div>
     <div id="chkList"></div>
-    <button class="btn danger" id="chkReset" style="margin-top:6px">Réinitialiser</button></div>
+    <button class="btn ${validated?'primary':'accent'}" id="chkValide" style="margin-top:10px">${validated?'&#10003; Checklist validée — annuler':'Valider la checklist'}</button></div>
   <div class="card"><h2>Déclenchement GPS</h2>
     <div class="kv"><span class="k">GPS</span><span class="v" id="gpsState">${gpsActive?'actif':'inactif'}</span></div>
     <div class="kv"><span class="k">Vitesse sol</span><span class="v" id="gpsGS">—</span></div>
@@ -871,19 +929,14 @@ function renderChk(){
     <button class="btn accent" id="gpsBtn" style="margin-top:8px">${gpsActive?'Désactiver le suivi GPS':'Activer le suivi GPS'}</button>
     <div class="note" style="margin-top:8px">Roulage (>2 kt) · seuil de piste (<50 m) · approche destination.</div></div>`;
   const list=document.getElementById("chkList"); let html="";
-  phase.items.forEach((it,idx)=>{
+  phase.items.forEach((it)=>{
     if(it.action===""){ html+=`<div class="muted" style="font-weight:800;font-size:12px;letter-spacing:.5px;margin:10px 0 6px;color:var(--accent2)">${esc(it.item)}</div>`; return; }
-    const d=!!(state.chk[chkPhase]&&state.chk[chkPhase][idx]);
-    html+=`<div class="chk-item ${d?'done':''}" data-idx="${idx}"><div class="box">&#10003;</div>
+    html+=`<div class="chk-item ro ${validated?'done':''}"><div class="box">&#10003;</div>
       <div class="txt"><b>${esc(it.item)}</b><span>${esc(it.action)}</span></div></div>`;
   });
   list.innerHTML=html;
-  list.querySelectorAll(".chk-item").forEach(el=>el.onclick=()=>{
-    const idx=el.dataset.idx; state.chk[chkPhase]=state.chk[chkPhase]||{};
-    state.chk[chkPhase][idx]=!state.chk[chkPhase][idx]; saveState(); renderChk();
-  });
   document.querySelectorAll(".chk-tabs button").forEach(b=>b.onclick=()=>{chkPhase=b.dataset.ph;renderChk();});
-  document.getElementById("chkReset").onclick=()=>{ state.chk[chkPhase]={}; saveState(); renderChk(); };
+  document.getElementById("chkValide").onclick=()=>{ state.chk[chkPhase]=state.chk[chkPhase]||{}; state.chk[chkPhase].done=!state.chk[chkPhase].done; saveState(); renderChk(); };
   document.getElementById("gpsBtn").onclick=toggleGPS;
   bindInput("cptEntree",v=>state.compteur.entree=v,false);
   bindInput("cptSortie",v=>state.compteur.sortie=v,false);
@@ -932,9 +985,7 @@ function evalTriggers(){
       if(d<1500){ navTriggered[i]=true; const nx=state.navlog[i+1];
         navPopup((L.wpt||('Branche '+(i+1)))+' atteint', nx?('Suivant : cap '+(nx.cap||'?')+'° · '+(nx.alt||'?')+' ft'):'Derniere branche'); } } });
 }
-function phaseComplete(id){ const ph=P().checklists.find(x=>x.id===id); if(!ph) return false;
-  const real=ph.items.filter(it=>it.action!==""); const done=Object.keys(state.chk[id]||{}).filter(k=>state.chk[id][k]).length;
-  return real.length>0 && done>=real.length; }
+function phaseComplete(id){ return !!(state.chk[id] && state.chk[id].done); }
 const gpspop=document.getElementById("gpspop"); let pendingPhase=null;
 function beep(){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)();
   const o=ac.createOscillator(),g=ac.createGain(); o.frequency.value=880; o.connect(g); g.connect(ac.destination);
@@ -965,7 +1016,57 @@ let wakeLock=null;
 async function reqWake(){ try{ if('wakeLock' in navigator && (state.chrono.running||gpsActive) && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
 function relWake(){ try{ if(wakeLock && !state.chrono.running && !gpsActive){ wakeLock.release(); wakeLock=null; } }catch(e){} }
 /* ---- PLAN DE VOL ---- */
+/* ---- VAC (SIA, Licence Ouverte) ---- */
+function airacFolder(d){
+  const anchor=Date.UTC(2026,4,14), cyc=28*86400000;
+  const t=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
+  let n=Math.floor((t-anchor)/cyc), eff=anchor+n*cyc; if(eff>t) eff-=cyc;
+  const e=new Date(eff), M=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][e.getUTCMonth()];
+  return 'eAIP_'+String(e.getUTCDate()).padStart(2,'0')+'_'+M+'_'+e.getUTCFullYear();
+}
+function vacURL(icao){ return 'https://www.sia.aviation-civile.gouv.fr/media/dvd/'+airacFolder(new Date())+'/Atlas-VAC/PDF_AIPparSSection/VAC/AD/AD-2.'+(icao||'').toUpperCase().trim()+'.pdf'; }
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('envol_vac',1); r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('vac')) r.result.createObjectStore('vac'); }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function vacSave(icao,blob){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('vac','readwrite'); tx.objectStore('vac').put(blob,icao.toUpperCase()); tx.oncomplete=()=>res(1); tx.onerror=()=>rej(tx.error); }); }
+async function vacGet(icao){ const db=await idbOpen(); return new Promise((res)=>{ const tx=db.transaction('vac','readonly'); const rq=tx.objectStore('vac').get(icao.toUpperCase()); rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null); }); }
+async function vacDelete(icao){ const db=await idbOpen(); return new Promise((res)=>{ const tx=db.transaction('vac','readwrite'); tx.objectStore('vac').delete(icao.toUpperCase()); tx.oncomplete=()=>res(1); tx.onerror=()=>res(0); }); }
+async function vacShow(icao){
+  icao=(icao||'').toUpperCase().trim(); if(icao.length<4){ alert('Code OACI invalide'); return; }
+  document.getElementById('vacBrowser').href=vacURL(icao);
+  document.getElementById('vacTitle').textContent='VAC '+icao;
+  const fr=document.getElementById('vacFrame');
+  let blob=null; try{ blob=await vacGet(icao); }catch(e){}
+  fr.src = blob ? URL.createObjectURL(blob) : vacURL(icao);
+  document.getElementById('vacview').classList.remove('hide');
+}
+async function vacDownload(icao){
+  icao=(icao||'').toUpperCase().trim(); const st=document.getElementById('vacStatus');
+  if(icao.length<4){ if(st) st.innerHTML='<span class="pill warn">Code OACI invalide</span>'; return; }
+  if(st) st.innerHTML='<span class="pill warn">Téléchargement de '+esc(icao)+'\u2026</span>';
+  const url=vacURL(icao); let buf=null;
+  try{ const r=await fetch(url); if(r.ok) buf=await r.arrayBuffer(); }catch(e){}
+  if(!buf){ try{ const r=await fetch('https://api.allorigins.win/raw?url='+encodeURIComponent(url)); if(r.ok) buf=await r.arrayBuffer(); }catch(e){} }
+  if(!buf || buf.byteLength<1200){ if(st) st.innerHTML='<span class="pill warn">\u00c9chec \u2014 ouvre dans le navigateur, ou v\u00e9rifie le code/cycle</span>'; return; }
+  try{ await vacSave(icao,new Blob([buf],{type:'application/pdf'})); if(st) st.innerHTML='<span class="pill ok">VAC '+esc(icao)+' enregistr\u00e9e hors-ligne</span>'; }catch(e){ if(st) st.innerHTML='<span class="pill warn">Erreur de stockage</span>'; }
+}
+function vacCard(defIcao){
+  const folder=airacFolder(new Date()).replace('eAIP_','').replace(/_/g,' ');
+  return '<div class="card"><h2>Carte VAC</h2>'
+    +'<label class="fld">A\u00e9rodrome (OACI)<input id="vacIcao" value="'+esc(defIcao||'')+'" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="LFPA"></label>'
+    +'<div class="row" style="margin-top:8px"><button class="btn accent" id="vacOpen">Afficher la VAC</button><button class="btn ghost" id="vacDl">T\u00e9l\u00e9charger hors-ligne</button></div>'
+    +'<div id="vacStatus" class="note" style="margin-top:8px"></div>'
+    +'<div class="note" style="margin-top:6px">La VAC officielle contient le plan d\'a\u00e9rodrome (sol) et la carte d\'approche \u00e0 vue. Source : SIA \u2014 cycle '+folder+' \u00b7 Licence Ouverte.</div></div>';
+}
+function bindVac(){
+  const ic=document.getElementById('vacIcao'); if(!ic) return;
+  ic.addEventListener('input',()=>{ const p=ic.selectionStart; ic.value=ic.value.toUpperCase(); try{ic.setSelectionRange(p,p);}catch(e){} vacStatusInit(ic.value); });
+  document.getElementById('vacOpen').onclick=()=>vacShow(ic.value);
+  document.getElementById('vacDl').onclick=()=>vacDownload(ic.value);
+  vacStatusInit(ic.value);
+}
+async function vacStatusInit(icao){ const st=document.getElementById('vacStatus'); if(!st) return; icao=(icao||'').toUpperCase().trim(); if(icao.length<4){ st.innerHTML=''; return; } let b=null; try{b=await vacGet(icao);}catch(e){} st.innerHTML=b?'<span class="pill ok">Disponible hors-ligne</span>':''; }
+
 function renderNav(){
+
   const nl=state.navlog||[];
   const legs=nl.map((L,i)=>legCard(L,i)).join("");
   main.innerHTML=`
@@ -978,6 +1079,7 @@ function renderNav(){
     <div class="kv"><span class="k">Vitesse sol / route</span><span class="v" id="navGs">\u2014</span></div>
     <button class="btn accent" id="navGpsBtn" style="margin-top:8px">${gpsActive?'D\u00e9sactiver le suivi GPS':'Activer le suivi GPS'}</button>
     <div class="note" style="margin-top:8px">Quand un point (avec coordonn\u00e9es) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
+  ${vacCard(state.meteo.dep)}
   <div id="legs">${legs||'<div class="note" style="margin-bottom:10px">Aucune branche. Ajoutez la premi\u00e8re ci-dessous.</div>'}</div>
   <button class="btn primary" id="addLeg">+ Ajouter une branche</button>`;
   document.getElementById("navGpsBtn").onclick=toggleGPS;
@@ -985,6 +1087,7 @@ function renderNav(){
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
     const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); }; });
   updateNavGps();
+  bindVac();
 }
 function legCard(L,i){
   return `<div class="leg"><div class="lh"><b>Branche ${i+1}</b><button class="btn danger" style="width:auto;min-height:38px;padding:6px 12px" id="legDel${i}">Suppr.</button></div>
@@ -1102,6 +1205,7 @@ function bindInput(id,fn,live,after){
 /* ---- DÉMARRAGE ---- */
 document.getElementById("chrono").onclick=chronoToggle;
 document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
+document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacview").classList.add("hide"); document.getElementById("vacFrame").src="about:blank"; };
 document.getElementById("pdfPrint").onclick=()=>window.print();
 render();
 updateChronoChip();
