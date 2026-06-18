@@ -223,6 +223,7 @@
   .qa:active{background:var(--panel2);}
   .qa .qi{font-size:24px;}
 
+  .rmap-wrap{width:100%;max-width:600px;overflow:hidden;margin:0 auto;}
   .navtbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .navtbl{width:100%;border-collapse:collapse;font-size:14px;}
   .navtbl th{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:800;text-align:left;padding:6px 5px;border-bottom:2px solid var(--line);}
@@ -620,6 +621,7 @@ function segDevis(active){
 }
 function render(){
   lockPerfTab(!wbValid());
+  autoLegs();
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab||(x.dataset.tab==="wb"&&currentTab==="perf")));
   if(currentTab==="home") renderHome();
   else if(currentTab==="profil") renderProfil();
@@ -656,6 +658,13 @@ function renderHome(){
       <div>Avion<b>${esc(p.immat)}</b></div>
     </div>
   </div>
+  <div class="card"><h2>Chronomètre</h2>
+    <div class="phase-grid">
+      <button class="phbtn ${state.chrono.offBlock?'set':''} ${!state.chrono.offBlock?'next':''}" id="phOff">Off-block<small>${hhmmUTC(state.chrono.offBlock)}</small></button>
+      <button class="phbtn ${state.chrono.takeOff?'set':''} ${(state.chrono.offBlock&&!state.chrono.takeOff)?'next':''} ${!state.chrono.offBlock?'dis':''}" id="phTO">Décollage<small>${hhmmUTC(state.chrono.takeOff)}</small></button>
+      <button class="phbtn ${state.chrono.landing?'set':''} ${(state.chrono.takeOff&&!state.chrono.landing)?'next':''} ${!state.chrono.takeOff?'dis':''}" id="phLD">Atterrissage<small>${hhmmUTC(state.chrono.landing)}</small></button>
+      <button class="phbtn ${state.chrono.onBlock?'set':''} ${(state.chrono.landing&&!state.chrono.onBlock)?'next':''} ${!state.chrono.landing?'dis':''}" id="phOn">On-block<small>${hhmmUTC(state.chrono.onBlock)}</small></button>
+    </div></div>
   ${nextHTML}
   <div class="eyebrow">État de l'appareil</div>
   <div class="home-status">
@@ -675,6 +684,8 @@ function renderHome(){
   </div>
   <div class="note" style="text-align:center;margin-top:14px">Aide à la décision — le commandant de bord reste responsable.</div>`;
   main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ const t=el.dataset.go; if(t==='perf'&&!wbValid()){ currentTab='wb'; } else { currentTab=t; } render(); });
+  const phm={phOff:'offBlock',phTO:'takeOff',phLD:'landing',phOn:'onBlock'};
+  Object.keys(phm).forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=()=>chPhaseStamp(phm[id]); });
 }
 function renderSettings(){
   const r=computeWB(), p=P();
@@ -880,7 +891,7 @@ function planeSVG(i){
       +`background:${set?'rgba(61,220,151,.20)':'rgba(20,28,40,.10)'};">${txt}</div>`;
   }
   const kg=v=>v>0?fmt(v)+' kg':'+', L=v=>v>0?fmt(v)+' L':'+';
-  return `<div style="position:relative;width:100%;max-width:440px;margin:0 auto">`
+  return `<div style="position:relative;width:calc(100% + 28px);max-width:none;margin:0 -14px">`
     +`<img src="${PLANE_IMG}" alt="Vue de dessus PA-28" style="width:100%;display:block;border-radius:14px">`
     +zone('fuelL',29,31,9,13,L(i.fuelLeft),i.fuelLeft>0)
     +zone('fuelR',62,31,9,13,L(i.fuelRight),i.fuelRight>0)
@@ -890,6 +901,89 @@ function planeSVG(i){
     +`</div>`;
 }
 
+function routeSVG(){
+  const pts=[];
+  const dep=lookupAirport((state.meteo.dep||'').toUpperCase());
+  if(dep) pts.push({la:dep.la,lo:dep.lo,nm:(state.meteo.dep||'').toUpperCase(),t:'dep'});
+  (state.navlog||[]).forEach(L=>{ const la=parseFloat(L.lat),lo=parseFloat(L.lon); if(isFinite(la)&&isFinite(lo)) pts.push({la:la,lo:lo,nm:((L.wpt||'').toUpperCase()).slice(0,12),t:'wp'}); });
+  const arr=lookupAirport((state.meteo.arr||'').toUpperCase());
+  if(arr) pts.push({la:arr.la,lo:arr.lo,nm:(state.meteo.arr||'').toUpperCase(),t:'arr'});
+  if(pts.length<2) return '<div class="note">Trajet indisponible : saisissez les aérodromes de départ et d\'arrivée (onglet Vol), et éventuellement des points avec coordonnées.</div>';
+  const W=600,H=380,pad=46;
+  const meanLa=pts.reduce((a,p)=>a+p.la,0)/pts.length, kx=Math.cos(meanLa*Math.PI/180);
+  const xs=pts.map(p=>p.lo*kx), ys=pts.map(p=>p.la);
+  let minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs),minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
+  const dx=(maxX-minX)||0.02, dy=(maxY-minY)||0.02, sc=Math.min((W-2*pad)/dx,(H-2*pad)/dy);
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const px=x=>W/2+(x-cx)*sc, py=y=>H/2-(y-cy)*sc;
+  const P2=pts.map(p=>({x:px(p.lo*kx),y:py(p.la),nm:p.nm,t:p.t}));
+  const line=P2.map(q=>q.x.toFixed(1)+','+q.y.toFixed(1)).join(' ');
+  let dots='';
+  P2.forEach(q=>{ const col=q.t==='dep'?'#0e9d63':(q.t==='arr'?'#2563eb':'#6b7480'), rad=q.t==='wp'?4:7;
+    const right=q.x>W-90, lx=right?q.x-9:q.x+9, anc=right?'end':'start';
+    dots+='<circle cx="'+q.x.toFixed(1)+'" cy="'+q.y.toFixed(1)+'" r="'+rad+'" fill="'+col+'" stroke="#fff" stroke-width="1.5"/>';
+    dots+='<text x="'+lx.toFixed(1)+'" y="'+(q.y-9).toFixed(1)+'" font-size="13" font-weight="700" fill="#1b2430" text-anchor="'+anc+'">'+esc(q.nm)+'</text>';
+  });
+  let gps='';
+  if(typeof gpsLast!=='undefined' && gpsLast && isFinite(gpsLast.lat)){ const gx=px(gpsLast.lon*kx), gy=py(gpsLast.la!=null?gpsLast.la:gpsLast.lat);
+    if(gx>=0&&gx<=W&&gy>=0&&gy<=H) gps='<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="6" fill="#d23b3b" stroke="#fff" stroke-width="2"/><text x="'+(gx+9).toFixed(1)+'" y="'+(gy+4).toFixed(1)+'" font-size="12" font-weight="700" fill="#d23b3b">avion</text>'; }
+  let totNM=0; for(let i=1;i<pts.length;i++) totNM+=_hav(pts[i-1].la,pts[i-1].lo,pts[i].la,pts[i].lo)/1.852;
+  const planned=(state.navlog||[]).some(L=>isFinite(parseFloat(L.lat))&&isFinite(parseFloat(L.lon)));
+  return '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:540px;background:#f3efe6;border:1px solid #d9d2c4;border-radius:12px">'
+    +'<polyline points="'+line+'" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="'+(planned?'0':'7 5')+'"/>'
+    +dots+gps
+    +'<text x="12" y="'+(H-12)+'" font-size="12" fill="#6b7480">'+(planned?'Selon plan de vol':'Route directe')+'</text>'
+    +'<text x="'+(W-12)+'" y="'+(H-12)+'" font-size="12" fill="#6b7480" text-anchor="end">~'+totNM.toFixed(0)+' NM</text></svg>';
+}
+function _merX(lon,z){ return (lon+180)/360*256*Math.pow(2,z); }
+function _merY(lat,z){ const r=lat*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z); }
+function _routePts(){
+  const pts=[];
+  const dep=lookupAirport((state.meteo.dep||'').toUpperCase());
+  if(dep) pts.push({la:dep.la,lo:dep.lo,nm:(state.meteo.dep||'').toUpperCase(),t:'dep'});
+  (state.navlog||[]).forEach(L=>{ const la=parseFloat(L.lat),lo=parseFloat(L.lon); if(isFinite(la)&&isFinite(lo)) pts.push({la:la,lo:lo,nm:((L.wpt||'').toUpperCase()).slice(0,12),t:'wp'}); });
+  const arr=lookupAirport((state.meteo.arr||'').toUpperCase());
+  if(arr) pts.push({la:arr.la,lo:arr.lo,nm:(state.meteo.arr||'').toUpperCase(),t:'arr'});
+  return pts;
+}
+function routeMap(){
+  const pts=_routePts();
+  if(pts.length<2) return '<div class="note">Trajet indisponible : saisissez les aérodromes de départ et d\'arrivée (onglet Vol), et éventuellement des points avec coordonnées.</div>';
+  const W=600,H=380,pad=44;
+  const las=pts.map(p=>p.la),los=pts.map(p=>p.lo);
+  const minLa=Math.min.apply(null,las),maxLa=Math.max.apply(null,las),minLo=Math.min.apply(null,los),maxLo=Math.max.apply(null,los);
+  let z=2; for(z=16; z>=2; z--){ const w=_merX(maxLo,z)-_merX(minLo,z), h=_merY(minLa,z)-_merY(maxLa,z); if(w<=W-2*pad && h<=H-2*pad) break; }
+  const cX=(_merX(minLo,z)+_merX(maxLo,z))/2, cY=(_merY(minLa,z)+_merY(maxLa,z))/2;
+  const oX=cX-W/2, oY=cY-H/2, n=Math.pow(2,z);
+  const tx0=Math.floor(oX/256), ty0=Math.floor(oY/256), tx1=Math.floor((oX+W)/256), ty1=Math.floor((oY+H)/256);
+  let tiles='';
+  for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
+    if(ty<0||ty>=n) continue; const wx=((tx%n)+n)%n;
+    tiles+='<img src="https://tile.openstreetmap.org/'+z+'/'+wx+'/'+ty+'.png" style="position:absolute;left:'+(tx*256-oX).toFixed(0)+'px;top:'+(ty*256-oY).toFixed(0)+'px;width:256px;height:256px" alt="">';
+  }
+  const sp=pts.map(p=>({x:_merX(p.lo,z)-oX,y:_merY(p.la,z)-oY,nm:p.nm,t:p.t}));
+  const line=sp.map(q=>q.x.toFixed(1)+','+q.y.toFixed(1)).join(' ');
+  let dots='';
+  sp.forEach(q=>{ const col=q.t==='dep'?'#0e9d63':(q.t==='arr'?'#1d4ed8':'#444'), rad=q.t==='wp'?4:7;
+    const right=q.x>W-100, lx=right?q.x-10:q.x+10, anc=right?'end':'start';
+    dots+='<circle cx="'+q.x.toFixed(1)+'" cy="'+q.y.toFixed(1)+'" r="'+rad+'" fill="'+col+'" stroke="#fff" stroke-width="2"/>';
+    dots+='<text x="'+lx.toFixed(1)+'" y="'+(q.y-9).toFixed(1)+'" font-size="13" font-weight="800" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke" text-anchor="'+anc+'">'+esc(q.nm)+'</text>';
+  });
+  let gps='';
+  if(typeof gpsLast!=='undefined' && gpsLast && isFinite(gpsLast.lat)){ const gx=_merX(gpsLast.lon,z)-oX, gy=_merY(gpsLast.lat,z)-oY;
+    if(gx>=0&&gx<=W&&gy>=0&&gy<=H) gps='<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="6" fill="#d23b3b" stroke="#fff" stroke-width="2"/><text x="'+(gx+10).toFixed(1)+'" y="'+(gy+4).toFixed(1)+'" font-size="12" font-weight="800" fill="#d23b3b" stroke="#fff" stroke-width="3" paint-order="stroke">avion</text>'; }
+  let totNM=0; for(let i=1;i<pts.length;i++) totNM+=_hav(pts[i-1].la,pts[i-1].lo,pts[i].la,pts[i].lo)/1.852;
+  const svg='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0;width:'+W+'px;height:'+H+'px;pointer-events:none">'
+    +'<polyline points="'+line+'" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85" stroke-linejoin="round"/>'
+    +'<polyline points="'+line+'" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round"/>'
+    +dots+gps
+    +'<text x="10" y="'+(H-12)+'" font-size="12" font-weight="700" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke">~'+totNM.toFixed(0)+' NM</text></svg>';
+  return '<div class="rmap-wrap"><div class="rmap" style="position:relative;width:'+W+'px;height:'+H+'px;overflow:hidden;border-radius:12px;border:1px solid #d9d2c4;background:#dfe7ee">'
+    +tiles+svg
+    +'<div style="position:absolute;right:4px;bottom:3px;font-size:9px;color:#222;background:rgba(255,255,255,.8);padding:0 5px;border-radius:5px">&copy; OpenStreetMap</div>'
+    +'</div></div>';
+}
+function fitRouteMap(){ document.querySelectorAll('.rmap-wrap').forEach(w=>{ const m=w.querySelector('.rmap'); if(!m) return; const s=Math.min(1,(w.clientWidth||600)/600); m.style.transformOrigin='top left'; m.style.transform='scale('+s+')'; w.style.height=(380*s)+'px'; }); }
 function envelopeSVG(r){
   const ax=P().wb.envelopeAxis,poly=P().wb.envelope,W=320,H=240,pad=38;
   const sx=a=>pad+(a-ax.armMin)/(ax.armMax-ax.armMin)*(W-pad-10);
@@ -955,9 +1049,9 @@ function chPhaseStamp(field){ const c=state.chrono;
   else if(field==='takeOff'){ if(!c.offBlock||c.takeOff) return; c.takeOff=Date.now(); }
   else if(field==='landing'){ if(!c.takeOff||c.landing) return; c.landing=Date.now(); }
   else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); relWake(); }
-  saveState(); updateChronoChip(); if(currentTab==='wb') renderWB();
+  saveState(); render(); updateChronoChip();
 }
-function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; saveState(); updateChronoChip(); if(currentTab==='wb') renderWB(); }
+function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; saveState(); render(); updateChronoChip(); }
 function fmtHMS(ms){ ms=Math.max(0,ms|0); let s=Math.floor(ms/1000),h=Math.floor(s/3600); s-=h*3600; let m=Math.floor(s/60); s-=m*60; const p=n=>String(n).padStart(2,'0'); return (h>0?h+':'+p(m):m)+':'+p(s); }
 function updateChronoChip(){ const fl=inFlight(); const ms=fl?chAirMs():chBlockMs(); const el=document.getElementById('chrono'); if(el){ el.textContent=(fl?'\u25B2 ':'\u23F1 ')+fmtHMS(ms); el.classList.toggle('run', chronoRunning()||fl); } const b=document.getElementById('wbBlock'); if(b) b.textContent=fmtHMS(chBlockMs()); const a=document.getElementById('wbAir'); if(a) a.textContent=fmtHMS(chAirMs()); const pb=document.getElementById('phaseBadge'); if(pb){ pb.textContent=fl?'EN VOL':'AU SOL'; pb.className='phase-badge '+(fl?'vol':'sol'); } }
 
@@ -1265,7 +1359,7 @@ function renderNav(){
       <tfoot><tr><td></td><td>Total</td><td></td><td></td><td>${totDist?totDist.toFixed(0):'—'}</td><td>${totTime?totTime.toFixed(0):'—'}</td><td></td></tr></tfoot>
     </table></div>`:'<div class="note">Aucune branche. Ajoutez la première ci-dessous.</div>'}
     <button class="btn primary" id="addLeg" style="margin-top:12px">+ Ajouter une branche</button>
-    <div class="note" style="margin-top:8px">Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées automatiquement.</div></div>
+    <div class="note" style="margin-top:8px">Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées automatiquement. Le <b>cap (route vraie)</b> et la <b>distance</b> sont alors calculés automatiquement entre points géoréférencés (1re branche depuis le départ) — à corriger de la déclinaison et du vent.</div></div>
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
       <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
@@ -1291,13 +1385,23 @@ function renderNav(){
   updateNavGps();
   bindVac();
 }
+function bearingDeg(a,b){ const r=Math.PI/180, p1=a.la*r, p2=b.la*r, dl=(b.lo-a.lo)*r; const y=Math.sin(dl)*Math.cos(p2); const x=Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+function legFrom(i){ if(i===0){ const d=lookupAirport((state.meteo.dep||'').toUpperCase()); return d?{la:d.la,lo:d.lo}:null; } const pl=state.navlog[i-1]; const la=parseFloat(pl&&pl.lat),lo=parseFloat(pl&&pl.lon); return (isFinite(la)&&isFinite(lo))?{la:la,lo:lo}:null; }
+function legTo(i){ const l=state.navlog[i]; const la=parseFloat(l&&l.lat),lo=parseFloat(l&&l.lon); return (isFinite(la)&&isFinite(lo))?{la:la,lo:lo}:null; }
+function computeLeg(i){ const f=legFrom(i),t=legTo(i); if(!f||!t) return null; return { cap:Math.round(bearingDeg(f,t)), dist:(_hav(f.la,f.lo,t.la,t.lo)/1.852).toFixed(1) }; }
+function autoLegs(){ (state.navlog||[]).forEach((L,i)=>{ const c=computeLeg(i); if(c){ L.cap=String(c.cap); L.dist=String(c.dist); } }); }
+function refreshLegCalc(i){ [i,i+1].forEach(k=>{ if(!state.navlog||!state.navlog[k]) return; const c=computeLeg(k); const cc=document.getElementById('leg'+k+'cap'),dd=document.getElementById('leg'+k+'dist'); if(c){ state.navlog[k].cap=String(c.cap); state.navlog[k].dist=String(c.dist); if(cc){ cc.value=c.cap; cc.readOnly=true; } if(dd){ dd.value=c.dist; dd.readOnly=true; } } else { if(cc) cc.readOnly=false; if(dd) dd.readOnly=false; } }); saveState(); }
 function legRow(L,i){
+  const auto=computeLeg(i);
+  const ro='readonly tabindex="-1" style="opacity:.72;background:transparent;border-color:transparent;font-weight:800"';
+  const capI=auto?`<input id="leg${i}cap" class="nnum" value="${esc(L.cap)}" ${ro}>`:`<input id="leg${i}cap" class="nnum" inputmode="numeric" value="${esc(L.cap)}">`;
+  const distI=auto?`<input id="leg${i}dist" class="nnum" value="${esc(L.dist)}" ${ro}>`:`<input id="leg${i}dist" class="nnum" inputmode="decimal" value="${esc(L.dist)}">`;
   return `<tr>
     <td class="nr">${i+1}</td>
     <td><input id="leg${i}wpt" value="${esc(L.wpt)}" placeholder="Point"></td>
-    <td><input id="leg${i}cap" class="nnum" inputmode="numeric" value="${esc(L.cap)}"></td>
+    <td>${capI}</td>
     <td><input id="leg${i}alt" class="nnum" inputmode="numeric" value="${esc(L.alt)}"></td>
-    <td><input id="leg${i}dist" class="nnum" inputmode="decimal" value="${esc(L.dist)}"></td>
+    <td>${distI}</td>
     <td><input id="leg${i}time" class="nnum" inputmode="decimal" value="${esc(L.time)}"></td>
     <td><button class="lgx" id="legMore${i}" title="Détails">&#8943;</button></td>
   </tr>
@@ -1310,7 +1414,7 @@ function legRow(L,i){
     <button class="btn danger" id="legDel${i}" style="margin-top:8px;min-height:40px">Supprimer la branche ${i+1}</button>
   </td></tr>`;
 }
-function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; if(f==='wpt'){ const m=el.value.toUpperCase().match(/\b(LF[A-Z]{2}|[A-Z]{4})\b/); if(m){ const a=lookupAirport(m[1]); if(a){ state.navlog[i].lat=a.la; state.navlog[i].lon=a.lo; const la=document.getElementById('leg'+i+'lat'),lo=document.getElementById('leg'+i+'lon'); if(la) la.value=a.la; if(lo) lo.value=a.lo; } } } saveState(); }); }
+function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; if(f==='wpt'){ const m=el.value.toUpperCase().match(/\b(LF[A-Z]{2}|[A-Z]{4})\b/); if(m){ const a=lookupAirport(m[1]); if(a){ state.navlog[i].lat=a.la; state.navlog[i].lon=a.lo; const la=document.getElementById('leg'+i+'lat'),lo=document.getElementById('leg'+i+'lon'); if(la) la.value=a.la; if(lo) lo.value=a.lo; } } } if(f==='wpt'||f==='lat'||f==='lon') refreshLegCalc(i); saveState(); }); }
 function updateNavGps(){
   if(currentTab!=='nav') return;
   const g=document.getElementById('navGps'); if(g) g.textContent=gpsActive?'actif':'inactif';
@@ -1331,6 +1435,9 @@ function renderCard(){
     <div class="kv" style="margin-top:8px"><span class="k">Masse / CG décollage</span><span class="v">${fmt(r.mass)} kg @ ${r.cg.toFixed(3)} m</span></div>
     <div class="kv"><span class="k">Centrage</span><span class="v">${valid?'<span class="pill ok">VALIDE</span>':'<span class="pill bad">HORS ENVELOPPE</span>'}</span></div>
     <div class="kv"><span class="k">Checklists normales</span><span class="v">${chkDone?'<span class="pill ok">COMPLÉTÉES</span>':'<span class="pill warn">PARTIELLES</span>'}</span></div></div>
+  <div class="card"><h2>Enveloppe de centrage</h2><div style="text-align:center">${envelopeSVG(r)}</div></div>
+  <div class="card"><h2>Trajet prévu</h2><div style="text-align:center">${routeMap()}</div>
+    <div class="note" style="margin-top:8px">Route directe (pointillés) ou selon les points du plan de vol dont les coordonnées sont saisies.</div></div>
   <div class="card"><h2>Signature du PIC</h2>
     <canvas id="sigpad"></canvas>
     <div class="row" style="margin-top:10px">
@@ -1345,12 +1452,13 @@ function renderCard(){
   document.getElementById("sigClear").onclick=clearSig;
   document.getElementById("sigSave").onclick=()=>{ state.sig=sigCanvas.toDataURL("image/png"); saveState(); document.getElementById("sigStatus").innerHTML='<span class="pill ok">Signature enregistrée</span>'; };
   document.getElementById("btnPdf").onclick=exportPDF;
+  fitRouteMap();
 }
 let sigCanvas,sigCtx,sigDrawing=false;
 function setupSigPad(){
   sigCanvas=document.getElementById("sigpad"); const ratio=window.devicePixelRatio||1;
   const rect=sigCanvas.getBoundingClientRect(); sigCanvas.width=rect.width*ratio; sigCanvas.height=rect.height*ratio;
-  sigCtx=sigCanvas.getContext("2d"); sigCtx.scale(ratio,ratio); sigCtx.lineWidth=2.4; sigCtx.lineCap="round"; sigCtx.strokeStyle="#eee9df";
+  sigCtx=sigCanvas.getContext("2d"); sigCtx.scale(ratio,ratio); sigCtx.lineWidth=2.4; sigCtx.lineCap="round"; sigCtx.strokeStyle="#111";
   if(state.sig){ const img=new Image(); img.onload=()=>sigCtx.drawImage(img,0,0,rect.width,rect.height); img.src=state.sig; }
   const pos=e=>{const rc=sigCanvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-rc.left,y:t.clientY-rc.top};};
   const start=e=>{e.preventDefault();sigDrawing=true;const pt=pos(e);sigCtx.beginPath();sigCtx.moveTo(pt.x,pt.y);};
@@ -1371,6 +1479,7 @@ function exportPDF(){
   h+='<h3>Masse &amp; centrage</h3><table><tr><th>Poste</th><th style="text-align:right">Masse (kg)</th><th style="text-align:right">Bras (m)</th><th style="text-align:right">Moment</th></tr>'+rows
     +'<tr style="font-weight:bold"><td>TOTAL D\u00c9COLLAGE</td><td style="text-align:right">'+fmt(r.mass)+'</td><td style="text-align:right">'+r.cg.toFixed(3)+'</td><td style="text-align:right">'+fmt(r.moment)+'</td></tr></table>';
   h+='<div class="box">Centrage : <b class="'+(valid?'ok':'bad')+'">'+(valid?"DANS L'ENVELOPPE":'HORS ENVELOPPE')+'</b> | MTOW '+r.maxWeight+' kg | ZFW '+fmt(r.zfMass)+' kg @ '+r.zfCG.toFixed(3)+' m | Carburant '+fmt(r.fuelL)+' L</div>';
+  h+='<h3>Enveloppe de centrage</h3><div class="box" style="text-align:center">'+envelopeSVG(r)+'</div>';
   if(perf){ h+='<h3>Performances</h3><table>'
     +'<tr><th>Décollage</th><td>'+esc(perf.to.icao||'?')+' QFU '+esc(perf.to.qfu||'?')+' ('+(perf.to.hdg!=null?perf.to.hdg+'°':'—')+') — '+esc(perf.to.surface)+'</td><th>Atterrissage</th><td>'+esc(perf.ldg.icao||'?')+' QFU '+esc(perf.ldg.qfu||'?')+' ('+(perf.ldg.hdg!=null?perf.ldg.hdg+'°':'—')+') — '+esc(perf.ldg.surface)+'</td></tr>'
     +'<tr><th>Vent / alt. densité</th><td>'+(perf.to.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.to.wc.head).toFixed(0)+' kt · '+perf.to.da+' ft</td><th>Vent / alt. densité</th><td>'+(perf.ldg.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.ldg.wc.head).toFixed(0)+' kt · '+perf.ldg.da+' ft</td></tr>'
@@ -1378,6 +1487,7 @@ function exportPDF(){
     +'<tr><th>OAT / QNH</th><td>'+perf.oat+' °C / '+perf.qnh+' hPa</td><th>Vr/Vx/Vy · Vapp</th><td>'+perf.speeds.vr+'/'+perf.speeds.vx+'/'+perf.speeds.vy+' · '+perf.speeds.vApproachFlaps40+' kt</td></tr></table>'; }
   h+='<h3>Conditions / route</h3><div class="box mono">Route : '+esc(state.meteo.dep||'\u2014')+' \u2192 '+esc(state.meteo.arr||'\u2014')
     +'\nVent '+esc(state.meteo.windDir)+'\u00b0 / '+esc(state.meteo.windSpd)+' kt \u2014 '+esc(state.meteo.temp)+' \u00b0C \u2014 QNH '+esc(state.meteo.qnh)+' hPa</div>';
+  h+='<h3>Trajet prévu</h3><div class="box" style="text-align:center">'+routeSVG()+'</div>';
   if(navRows) h+='<h3>Plan de vol</h3><table><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Temps</th><th>Obs.</th></tr>'+navRows+'</table>';
   h+='<h3>Compteur &amp; temps</h3><div class="box">Compteur entr\u00e9e : <b>'+esc(state.compteur.entree||'\u2014')+'</b> \u00b7 sortie : <b>'+esc(state.compteur.sortie||'\u2014')+'</b> \u00b7 temps compteur : <b>'+cdelta+'</b><br>Temps bloc : <b>'+fmtHMS(chBlockMs())+'</b> · Temps de vol : <b>'+fmtHMS(chAirMs())+'</b></div>';
   h+='<div class="box">Checklists normales compl\u00e9t\u00e9es : <b class="'+(chkDone?'ok':'bad')+'">'+(chkDone?'OUI':'NON')+'</b></div>';
@@ -1414,6 +1524,7 @@ function bindInput(id,fn,live,after){
 /* ---- DÉMARRAGE ---- */
 document.getElementById("chrono").onclick=()=>{ currentTab="wb"; render(); };
 document.getElementById("homeBtn").onclick=()=>{ currentTab="home"; render(); };
+window.addEventListener("resize",()=>{ if(typeof fitRouteMap==="function") fitRouteMap(); });
 document.getElementById("settingsBtn").onclick=()=>{ currentTab="settings"; render(); };
 document.getElementById("carnetBtn").onclick=()=>{ currentTab="card"; render(); };
 document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
