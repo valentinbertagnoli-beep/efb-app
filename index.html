@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0e14">
+<meta name="theme-color" content="#eee9df">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,9 +13,9 @@
 <title>EnVol EFB — F-GRLA</title>
 <style>
   :root{
-    --bg:#0a0e14; --panel:#121823; --panel2:#1a2230; --line:#2a3548;
-    --ink:#e8eef7; --muted:#8a97ab; --accent:#3ddc97; --accent2:#39b0ff;
-    --warn:#ffb020; --danger:#ff4d4d; --ok:#2fd07a; --tap:64px;
+    --bg:#eee9df; --panel:#ffffff; --panel2:#f3efe6; --line:#d9d2c4;
+    --ink:#1b2430; --muted:#6b7480; --accent:#0e9d63; --accent2:#2563eb;
+    --warn:#b7791f; --danger:#d23b3b; --ok:#0e9d63; --tap:64px;
     --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
     --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
   }
@@ -26,7 +26,7 @@
     font-size:17px;line-height:1.35;overflow:hidden;-webkit-text-size-adjust:100%;user-select:none;}
   .hide{display:none!important;}
   #app{display:flex;flex-direction:column;height:100%;}
-  header{background:linear-gradient(180deg,#0d131d,#0a0e14);border-bottom:1px solid var(--line);
+  header{background:linear-gradient(180deg,#ffffff,#f3efe6);border-bottom:1px solid var(--line);
     padding:calc(var(--safe-t) + 8px) calc(12px + var(--safe-r)) 8px calc(12px + var(--safe-l));
     display:flex;align-items:center;gap:10px;}
   .logo{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.5px;}
@@ -36,17 +36,17 @@
   select,input,button,textarea{font-family:inherit;font-size:16px;color:var(--ink);}
   select{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:48px;font-weight:700;}
   .badge{font-size:13px;font-weight:800;letter-spacing:.6px;padding:6px 11px;border-radius:9px;
-    background:#0f2417;color:var(--accent);border:1px solid #1c5a3c;white-space:nowrap;}
+    background:#e3f7ee;color:var(--accent);border:1px solid #b8e6cf;white-space:nowrap;}
   main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
     padding:14px calc(14px + var(--safe-r)) 24px calc(14px + var(--safe-l));}
-  nav{display:flex;background:#0d131d;border-top:1px solid var(--line);padding-bottom:var(--safe-b);}
+  nav{display:flex;background:#ffffff;border-top:1px solid var(--line);padding-bottom:var(--safe-b);}
   nav button{flex:1;background:none;border:none;color:var(--muted);padding:9px 2px;min-height:var(--tap);
     display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:700;cursor:pointer;
     border-top:3px solid transparent;transition:.12s;}
   nav button .ic{font-size:21px;line-height:1;}
-  nav button.on{color:var(--accent);border-top-color:var(--accent);background:#0f1722;}
-  nav button:active{background:#11203a;}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;}
+  nav button.on{color:var(--accent);border-top-color:var(--accent);background:#e6f6ee;}
+  nav button:active{background:#ece8df;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   .card h2{margin:0 0 12px;font-size:15px;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;font-weight:800;}
   .card h3{margin:14px 0 8px;font-size:14px;color:var(--accent2);letter-spacing:.4px;}
   .row{display:flex;gap:10px;flex-wrap:wrap;} .row>*{flex:1;min-width:120px;}
@@ -58,10 +58,10 @@
     font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;color:var(--ink);
     transition:.12s;width:100%;}
   .btn:active{transform:scale(.98);}
-  .btn.primary{background:linear-gradient(180deg,#1c7a55,#15603f);border-color:#1f8a5f;color:#eafff4;}
-  .btn.accent{background:linear-gradient(180deg,#1d6fb0,#155a8f);border-color:#2079b8;color:#eaf6ff;}
+  .btn.primary{background:linear-gradient(180deg,#16b277,#0e9d63);border-color:#0e9d63;color:#fff;}
+  .btn.accent{background:linear-gradient(180deg,#3b82f6,#2563eb);border-color:#2563eb;color:#fff;}
   .btn.ghost{background:transparent;}
-  .btn.danger{background:#3a1414;border-color:#5e1d1d;color:#ff8c8c;}
+  .btn.danger{background:#fdecec;border-color:#f1b4b4;color:#c0392b;}
   .kv{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);}
   .kv:last-child{border-bottom:none;}
   .kv .k{color:var(--muted);font-weight:700;} .kv .v{font-weight:800;font-variant-numeric:tabular-nums;}
@@ -69,21 +69,23 @@
   .muted{color:var(--muted);} .note{font-size:12.5px;color:var(--muted);line-height:1.5;}
   hr{border:none;border-top:1px solid var(--line);margin:14px 0;}
   .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800;}
-  .pill.ok{background:#0f2e20;color:var(--ok);border:1px solid #1c5a3c;}
-  .pill.bad{background:#3a1414;color:var(--danger);border:1px solid #5e1d1d;}
+  .pill.ok{background:#0f2e20;color:var(--ok);border:1px solid #b8e6cf;}
+  .pill.bad{background:#fdecec;color:var(--danger);border:1px solid #f1b4b4;}
   .pill.warn{background:#2a1c06;color:var(--warn);border:1px solid #5e451a;}
   .flash{animation:flash .7s infinite;} @keyframes flash{0%,100%{opacity:1}50%{opacity:.35}}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;} @media (max-width:520px){.grid2{grid-template-columns:1fr;}}
   .seatbtn{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:84px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;font-weight:800;}
   .seatbtn .lbl{font-size:12px;color:var(--muted);} .seatbtn .val{font-size:22px;font-variant-numeric:tabular-nums;}
-  .seatbtn.set{border-color:var(--accent);background:#0f2417;}
+  .seatbtn.set{border-color:var(--accent);background:#e3f7ee;}
   .planewrap{display:flex;justify-content:center;}
   svg .seat{cursor:pointer;} svg text{user-select:none;}
   .chk-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;-webkit-overflow-scrolling:touch;}
   .chk-tabs button{white-space:nowrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;
     padding:11px 14px;min-height:50px;font-weight:800;font-size:14px;color:var(--muted);flex:0 0 auto;}
-  .chk-tabs button.on{color:#06210f;background:var(--accent);border-color:var(--accent);}
+  .chk-tabs button.valid{color:#fff;background:var(--ok);border-color:var(--ok);}
+  .chk-tabs button.on:not(.valid):not(.urg){color:var(--ink);background:#ddd6c8;border-color:#c7bfb0;}
+  .chk-tabs button.valid.on{box-shadow:0 0 0 2px var(--accent2);}
   .chk-tabs button.urg.on{background:var(--danger);border-color:var(--danger);color:#fff;}
   .progress{height:14px;background:var(--panel2);border-radius:999px;overflow:hidden;border:1px solid var(--line);margin:6px 0 14px;}
   .progress>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;transition:.25s;}
@@ -92,13 +94,13 @@
   .chk-item:active{transform:scale(.995);}
   .chk-item .box{width:34px;height:34px;border-radius:9px;border:2px solid var(--muted);flex:0 0 auto;
     display:flex;align-items:center;justify-content:center;font-size:22px;color:transparent;}
-  .chk-item.done{opacity:.5;background:#0f2417;border-color:#1c5a3c;}
+  .chk-item.done{opacity:.5;background:#e3f7ee;border-color:#b8e6cf;}
   .chk-item.done .box{background:var(--ok);border-color:var(--ok);color:#06210f;}
   .chk-item .txt{flex:1;} .chk-item .txt b{display:block;font-size:15.5px;}
   .chk-item .txt span{font-size:13.5px;color:var(--accent2);font-weight:700;}
   .chk-item.done .txt b{text-decoration:line-through;}
-  .chk-info{background:#10202f;border:1px solid #1d3b52;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;color:#bfe0ff;}
-  .modal{position:fixed;inset:0;background:rgba(3,6,11,.72);backdrop-filter:blur(3px);display:flex;align-items:center;
+  .chk-info{background:#e8f1fb;border:1px solid #bcd7f5;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;color:#1d4ed8;}
+  .modal{position:fixed;inset:0;background:rgba(25,30,40,.45);backdrop-filter:blur(3px);display:flex;align-items:center;
     justify-content:center;z-index:50;padding:16px;}
   .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:18px;width:min(420px,100%);}
   .modal h3{margin:0 0 4px;font-size:18px;}
@@ -106,12 +108,12 @@
     border-radius:14px;padding:14px 18px;margin:12px 0;font-variant-numeric:tabular-nums;min-height:70px;}
   .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .keys button{min-height:62px;font-size:24px;font-weight:800;background:var(--panel2);border:1px solid var(--line);border-radius:14px;}
-  .keys button:active{background:#22324a;}
+  .keys button:active{background:#e6e2d8;}
   .modal .actions{display:flex;gap:10px;margin-top:12px;}
   #gpspop,#fuelpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:60;
-    border-radius:18px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;}
-  #gpspop{background:linear-gradient(180deg,#11314a,#0e2336);border:1px solid var(--accent2);}
-  #fuelpop{background:linear-gradient(180deg,#3a2a08,#2a1d05);border:1px solid var(--warn);}
+    border-radius:18px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center;}
+  #gpspop{background:linear-gradient(180deg,#eaf2fd,#dcebfb);border:1px solid var(--accent2);}
+  #fuelpop{background:linear-gradient(180deg,#fbf3e0,#f5e9c8);border:1px solid var(--warn);}
   #gpspop .t,#fuelpop .t{flex:1;}
   #gpspop .t b,#fuelpop .t b{display:block;font-size:13px;letter-spacing:.5px;}
   #gpspop .t b{color:var(--accent);} #fuelpop .t b{color:var(--warn);}
@@ -119,7 +121,7 @@
   #sigpad{width:100%;height:200px;background:#fff;border-radius:14px;touch-action:none;display:block;}
   .chrono{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;min-height:40px;
     font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;}
-  .chrono.run{border-color:var(--accent);color:var(--accent);background:#0f2417;}
+  .chrono.run{border-color:var(--accent);color:var(--accent);background:#e3f7ee;}
   .home-hero{display:flex;align-items:center;gap:14px;padding:14px 4px 10px;}
   .home-title{font-size:26px;font-weight:800;letter-spacing:.5px;}
   .home-title b{color:var(--accent);}
@@ -136,28 +138,28 @@
   .home-btn:active{background:var(--panel2);}
   .hb-ic{font-size:26px;}
   .phase-badge{display:inline-block;padding:6px 16px;border-radius:999px;font-weight:800;font-size:14px;letter-spacing:1px;}
-  .phase-badge.sol{background:#22303c;color:var(--accent2);border:1px solid var(--accent2);}
-  .phase-badge.vol{background:#0f2417;color:var(--accent);border:1px solid var(--accent);}
+  .phase-badge.sol{background:#e8eef6;color:var(--accent2);border:1px solid var(--accent2);}
+  .phase-badge.vol{background:#e3f7ee;color:var(--accent);border:1px solid var(--accent);}
   .phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
   .phbtn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 8px;min-height:58px;font-weight:800;font-size:14px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
   .phbtn small{font-size:12px;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;}
-  .phbtn.set{border-color:var(--accent);background:#0f2417;color:var(--accent);}
+  .phbtn.set{border-color:var(--accent);background:#e3f7ee;color:var(--accent);}
   .phbtn.set small{color:var(--accent);}
   .phbtn.next{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(96,165,250,.2);}
   .phbtn.dis{opacity:.4;}
   .acft-sel{flex-wrap:wrap;justify-content:flex-end;}
   #acftSelect{max-width:118px;}
   #navpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:60;border-radius:18px;padding:14px 16px;
-    box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#11314a,#0e2336);border:1px solid var(--accent2);}
+    box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#eaf2fd,#dcebfb);border:1px solid var(--accent2);}
   #navpop .t{flex:1;} #navpop .t b{display:block;font-size:13px;letter-spacing:.5px;color:var(--accent);} #navpop .t span{font-size:15px;font-weight:700;}
   #alertpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:65;border-radius:18px;padding:14px 16px;
-    box-shadow:0 12px 40px rgba(0,0,0,.6);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#3a1414,#2a0d0d);border:1px solid var(--danger);}
+    box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#fdecec,#f9d6d6);border:1px solid var(--danger);}
   #alertpop .t{flex:1;} #alertpop .t b{display:block;font-size:13px;letter-spacing:.5px;color:var(--danger);} #alertpop .t span{font-size:15px;font-weight:700;}
-  .mono{font-family:monospace;font-size:12.5px;color:#bfe0ff;white-space:pre-wrap;word-break:break-word;}
+  .mono{font-family:monospace;font-size:12.5px;color:#1d4ed8;white-space:pre-wrap;word-break:break-word;}
   .rwybtns{display:flex;flex-wrap:wrap;gap:8px;}
   .rwybtn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-height:50px;min-width:62px;font-weight:800;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;}
   .rwybtn small{font-size:11px;color:var(--muted);font-weight:700;}
-  .rwybtn.on{border-color:var(--accent);background:#0f2417;color:var(--accent);}
+  .rwybtn.on{border-color:var(--accent);background:#e3f7ee;color:var(--accent);}
   .rwybtn.on small{color:var(--accent);}
   .leg{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;}
   .leg .lh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
@@ -166,10 +168,10 @@
   .leg label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);font-weight:700;}
   .leg input{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:46px;font-size:16px;font-weight:700;color:var(--ink);width:100%;}
   .leg .span2{grid-column:1/-1;}
-  #vacview{position:fixed;inset:0;z-index:80;background:#0a0e14;display:flex;flex-direction:column;}
+  #vacview{position:fixed;inset:0;z-index:80;background:#eee9df;display:flex;flex-direction:column;}
   .chk-item.ro{cursor:default;}
-  #pdfview{position:fixed;inset:0;z-index:80;background:#0a0e14;display:flex;flex-direction:column;}
-  #pdfview .pdfbar{display:flex;gap:10px;padding:calc(var(--safe-t) + 10px) 12px 10px;background:#0d131d;border-bottom:1px solid var(--line);}
+  #pdfview{position:fixed;inset:0;z-index:80;background:#eee9df;display:flex;flex-direction:column;}
+  #pdfview .pdfbar{display:flex;gap:10px;padding:calc(var(--safe-t) + 10px) 12px 10px;background:#ffffff;border-bottom:1px solid var(--line);}
   #pdfview .pdfbar .btn{min-height:50px;}
   #pdfdoc{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#fff;color:#111;margin:12px;border-radius:10px;padding:16px;font-family:Arial,sans-serif;font-size:12px;}
   #pdfdoc h1{font-size:18px;margin:0;} #pdfdoc h3{margin:12px 0 4px;font-size:14px;}
@@ -187,23 +189,60 @@
     #pdfview .pdfbar{display:none !important;}
     #pdfdoc{margin:0;border-radius:0;padding:0;overflow:visible;}
   }
+
+  /* ===== Refonte : système visuel ===== */
+  header{box-shadow:0 1px 0 var(--line);}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  .iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:11px;min-width:44px;min-height:44px;font-size:19px;line-height:1;cursor:pointer;color:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .iconbtn:active{background:var(--line);}
+  @media(max-width:540px){ #immatBadge{display:none;} #acftSelect{max-width:104px;} }
+  nav button.on{border-top-color:var(--accent);}
+  .seg{display:flex;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:14px;}
+  .seg-b{flex:1;border:none;background:transparent;border-radius:10px;padding:12px 8px;min-height:48px;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer;}
+  .seg-b.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 5px rgba(0,0,0,.12);}
+  .seg-b.dis{opacity:.4;}
+  .eyebrow{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:800;margin:0 0 8px 2px;}
+  /* Tableau de bord */
+  .dash-top{background:linear-gradient(160deg,#ffffff,#f3efe6);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+  .dash-phase{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .dash-time{font-size:46px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1;}
+  .dash-time small{display:block;font-size:12px;font-weight:800;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;margin-top:6px;}
+  .dash-sub{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap;}
+  .dash-sub div{font-size:13px;color:var(--muted);font-weight:700;}
+  .dash-sub b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .nextwpt{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent2);border-radius:16px;padding:14px 16px;margin-bottom:14px;}
+  .nextwpt .ico{font-size:30px;}
+  .nextwpt .who{flex:1;}
+  .nextwpt .who b{font-size:20px;display:block;}
+  .nextwpt .who span{font-size:13px;color:var(--muted);font-weight:700;}
+  .nextwpt .met{text-align:right;font-variant-numeric:tabular-nums;}
+  .nextwpt .met b{font-size:18px;display:block;}
+  .nextwpt .met span{font-size:12px;color:var(--muted);}
+  .qa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .qa{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-weight:800;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:82px;justify-content:center;text-align:center;}
+  .qa:active{background:var(--panel2);}
+  .qa .qi{font-size:24px;}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="logo" id="homeBtn" style="cursor:pointer"><svg viewBox="0 0 100 100" width="30" height="30"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#3ddc97"/><circle cx="50" cy="88" r="6" fill="#3ddc97"/></svg><div>EnVol <b>EFB</b></div></div>
-    <div class="acft-sel"><button id="chrono" class="chrono" title="Chronomètre de vol">&#9201; 0:00</button><span class="badge" id="immatBadge">F-GRLA</span>
-      <select id="acftSelect" aria-label="Choix avion"></select></div>
+    <div class="top-right">
+      <button id="chrono" class="chrono" title="Chronomètre de vol">&#9201; 0:00</button>
+      <span class="badge" id="immatBadge">F-GRLA</span>
+      <select id="acftSelect" aria-label="Choix avion"></select>
+      <button id="carnetBtn" class="iconbtn" title="Carnet / Export">&#128221;</button>
+      <button id="settingsBtn" class="iconbtn" title="Réglages">&#9881;</button>
+    </div>
   </header>
   <main id="main"></main>
   <nav id="nav">
-    <button data-tab="profil" class="on"><span class="ic">&#128752;</span>Profil</button>
-    <button data-tab="wb"><span class="ic">&#9878;</span>Centrage</button>
-    <button data-tab="perf"><span class="ic">&#128200;</span>Perfs</button>
-    <button data-tab="chk"><span class="ic">&#10003;</span>Checklist</button>
-    <button data-tab="nav"><span class="ic">&#129517;</span>Plan vol</button>
-    <button data-tab="card"><span class="ic">&#128221;</span>Datacard</button>
+    <button data-tab="home" class="on"><span class="ic">&#128202;</span>Bord</button>
+    <button data-tab="profil"><span class="ic">&#128747;</span>Vol</button>
+    <button data-tab="wb"><span class="ic">&#9878;</span>Masse</button>
+    <button data-tab="chk"><span class="ic">&#9745;</span>Checklist</button>
+    <button data-tab="nav"><span class="ic">&#129517;</span>Nav</button>
   </nav>
 </div>
 <div id="gpspop" class="hide">
@@ -456,7 +495,7 @@ const LS_KEY="envol_efb_state_v2";
 function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
-    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"" },
+    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[] },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ surface:"Sèche/Dur", qfu:"10", toda:"", lda:"", mode:"estim", manTO:"", manLDG:"", icao:"", rwy:"" },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
@@ -482,7 +521,7 @@ document.querySelectorAll("#nav button").forEach(b=>{
     render();
   });
 });
-function lockPerfTab(lock){ const b=document.querySelector('#nav button[data-tab="perf"]'); b.style.opacity=lock?.45:1; }
+function lockPerfTab(lock){ const b=document.querySelector('#nav button[data-tab="perf"]'); if(b) b.style.opacity=lock?.45:1; }
 const acftSel=document.getElementById("acftSelect");
 Object.keys(AIRCRAFT_PROFILES).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=AIRCRAFT_PROFILES[k].type; acftSel.appendChild(o); });
 acftSel.value=state.acft;
@@ -558,9 +597,17 @@ function computePerf(){
 }
 
 /* ===== RENDER ===== */
+function goTab(t){ if(t==='perf'&&!wbValid()) return; currentTab=t; render(); }
+function segDevis(active){
+  const dis=!wbValid();
+  return `<div class="seg">`
+    +`<button class="seg-b ${active==='wb'?'on':''}" onclick="goTab('wb')">&#9878; Masse &amp; centrage</button>`
+    +`<button class="seg-b ${active==='perf'?'on':''} ${dis?'dis':''}" onclick="goTab('perf')">&#128200; Performances</button>`
+    +`</div>`;
+}
 function render(){
   lockPerfTab(!wbValid());
-  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab));
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab||(x.dataset.tab==="wb"&&currentTab==="perf")));
   if(currentTab==="home") renderHome();
   else if(currentTab==="profil") renderProfil();
   else if(currentTab==="wb") renderWB();
@@ -568,48 +615,98 @@ function render(){
   else if(currentTab==="chk") renderChk();
   else if(currentTab==="nav") renderNav();
   else if(currentTab==="card") renderCard();
+  else if(currentTab==="settings") renderSettings();
   main.scrollTop=0;
 }
 const ARROW_SVG='<svg viewBox="0 0 100 100" width="46" height="46"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#3ddc97"/><circle cx="50" cy="88" r="6" fill="#3ddc97"/></svg>';
 function renderHome(){
-  const p=P(), r=computeWB(), valid=wbValid(), fl=inFlight();
+  const p=P(), r=computeWB(), valid=wbValid(), fl=inFlight(), running=chronoRunning();
   const dep=state.meteo.dep||'—', arr=state.meteo.arr||'—';
+  const bigMs=fl?chAirMs():chBlockMs();
+  const bigLabel=fl?'Temps de vol':(running?'Temps bloc':'Au sol');
+  const legs=state.navlog||[];
+  const nxt=legs.find(l=>l && (''+(l.wpt||'')).trim());
+  const nLegs=legs.filter(l=>l&&(''+(l.wpt||'')).trim()).length;
+  const totDist=legs.reduce((s,l)=>s+(parseFloat(l&&l.dist)||0),0);
+  const nextHTML = nxt
+    ? `<div class="nextwpt"><div class="ico">&#128205;</div><div class="who"><b>${esc(nxt.wpt)}</b><span>Prochain point</span></div><div class="met"><b>${esc(nxt.cap||'—')}°</b><span>${esc(nxt.dist||'—')} NM · ${esc(nxt.alt||'—')} ft</span></div></div>`
+    : `<div class="nextwpt"><div class="ico">&#128205;</div><div class="who"><b>Plan de vol vide</b><span>Aucun point de navigation</span></div><div class="met"><b></b><span></span></div></div>`;
   main.innerHTML=`
-  <div class="home-hero">
-    <div class="home-logo">${ARROW_SVG}</div>
-    <div class="home-htxt"><div class="home-title">EnVol <b>EFB</b></div><div class="home-sub">${esc(p.immat)} · ${esc(p.type)}</div></div>
+  <div class="dash-top">
+    <div class="dash-phase">
+      <div class="dash-time">${fmtHMS(bigMs)}<small>${bigLabel}</small></div>
+      <span class="phase-badge ${fl?'vol':'sol'}">${fl?'EN VOL':'AU SOL'}</span>
+    </div>
+    <div class="dash-sub">
+      <div>Bloc<b>${fmtHMS(chBlockMs())}</b></div>
+      <div>Vol<b>${fmtHMS(chAirMs())}</b></div>
+      <div>Avion<b>${esc(p.immat)}</b></div>
+    </div>
   </div>
+  ${nextHTML}
+  <div class="eyebrow">État de l'appareil</div>
   <div class="home-status">
-    <div class="hs-card ${valid?'ok':'bad'}" data-go="wb"><span class="hs-k">Masse &amp; centrage</span><span class="hs-v">${valid?"Dans l'enveloppe":'Hors enveloppe'}</span><span class="hs-x">${fmt(r.mass)} kg au décollage</span></div>
-    <div class="hs-card" data-go="wb"><span class="hs-k">Carburant</span><span class="hs-v">${fmt(r.fuelL)} L</span><span class="hs-x">${state.fuelMgmt.active?'gestion active':'à bord'}</span></div>
-    <div class="hs-card ${fl?'vol':'sol'}" data-go="wb"><span class="hs-k">Phase</span><span class="hs-v">${fl?'EN VOL':'AU SOL'}</span><span class="hs-x">bloc ${fmtHMS(chBlockMs())}</span></div>
-    <div class="hs-card" data-go="profil"><span class="hs-k">Route</span><span class="hs-v">${esc(dep)} → ${esc(arr)}</span><span class="hs-x">QNH ${esc(state.meteo.qnh||'—')}</span></div>
+    <div class="hs-card ${valid?'ok':'bad'}" data-go="wb"><span class="hs-k">Masse &amp; centrage</span><span class="hs-v">${valid?"Dans l'enveloppe":'Hors enveloppe'}</span><span class="hs-x">${fmt(r.mass)} kg décollage</span></div>
+    <div class="hs-card" data-go="wb"><span class="hs-k">Carburant</span><span class="hs-v">${fmt(r.fuelL)} L</span><span class="hs-x">${state.fuelMgmt&&state.fuelMgmt.active?'gestion active':'à bord'}</span></div>
+    <div class="hs-card" data-go="profil"><span class="hs-k">Météo ${esc(dep)}</span><span class="hs-v">${esc(state.meteo.windDir||'—')}° / ${esc(state.meteo.windSpd||'—')} kt</span><span class="hs-x">QNH ${esc(state.meteo.qnh||'—')}</span></div>
+    <div class="hs-card" data-go="nav"><span class="hs-k">Plan de vol</span><span class="hs-v">${dep} → ${arr}</span><span class="hs-x">${nLegs} pts · ${totDist?totDist.toFixed(0)+' NM':'—'}</span></div>
   </div>
-  <div class="home-grid">
-    <button class="home-btn" data-go="profil"><span class="hb-ic">&#128752;</span>Profil &amp; Météo</button>
-    <button class="home-btn" data-go="wb"><span class="hb-ic">&#9878;</span>Masse &amp; Centrage</button>
-    <button class="home-btn" data-go="perf"><span class="hb-ic">&#128200;</span>Performances</button>
-    <button class="home-btn" data-go="chk"><span class="hb-ic">&#10003;</span>Checklists</button>
-    <button class="home-btn" data-go="nav"><span class="hb-ic">&#129517;</span>Plan de vol</button>
-    <button class="home-btn" data-go="card"><span class="hb-ic">&#128221;</span>Datacard</button>
+  <div class="eyebrow">Accès rapide</div>
+  <div class="qa-grid">
+    <button class="qa" data-go="profil"><span class="qi">&#128747;</span>Vol &amp; Météo</button>
+    <button class="qa" data-go="wb"><span class="qi">&#9878;</span>Masse</button>
+    <button class="qa" data-go="perf"><span class="qi">&#128200;</span>Performances</button>
+    <button class="qa" data-go="chk"><span class="qi">&#9745;</span>Checklists</button>
+    <button class="qa" data-go="nav"><span class="qi">&#129517;</span>Navigation</button>
+    <button class="qa" data-go="card"><span class="qi">&#128221;</span>Carnet</button>
   </div>
   <div class="note" style="text-align:center;margin-top:14px">Aide à la décision — le commandant de bord reste responsable.</div>`;
-  main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ currentTab=el.dataset.go; render(); });
+  main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ const t=el.dataset.go; if(t==='perf'&&!wbValid()){ currentTab='wb'; } else { currentTab=t; } render(); });
+}
+function renderSettings(){
+  const r=computeWB(), p=P();
+  const granted=("Notification" in window)&&Notification.permission==="granted";
+  main.innerHTML=`
+  <div class="eyebrow">Réglages</div>
+  <div class="card"><h2>Notifications &amp; écran</h2>
+    <div class="note">Alertes système (réservoir, checklist automatique, point tournant, carburant bas) et maintien de l'écran allumé pendant le vol.</div>
+    <button class="btn ${granted?'primary':'accent'}" id="setNotif" style="margin-top:10px">${granted?'&#10003; Notifications activées':'&#128276; Activer les notifications'}</button>
+    <div class="note" style="margin-top:8px">iOS : écran verrouillé / arrière-plan, les alertes ne peuvent pas se déclencher sans serveur. L'écran reste allumé tant qu'un chrono ou le GPS est actif.</div></div>
+  <div class="card"><h2>Appareil</h2>
+    <div class="kv"><span class="k">Type</span><span class="v">${esc(p.type)}</span></div>
+    <div class="kv"><span class="k">Immatriculation</span><span class="v">${esc(p.immat)}</span></div>
+    <div class="kv"><span class="k">Aérodrome de base</span><span class="v">${esc(p.aerodrome.icao)} — ${esc(p.aerodrome.name)}</span></div>
+    <div class="kv"><span class="k">MTOW</span><span class="v">${r.maxWeight} kg</span></div></div>
+  <div class="card"><h2>Données du vol</h2>
+    <button class="btn ghost" id="setReset">Réinitialiser le vol en cours</button>
+    <div class="note" style="margin-top:8px">Remet à zéro le chrono, le carburant en vol, les checklists et le plan de vol. L'avion et ses données de masse restent.</div></div>
+  <div class="card"><h2>À propos</h2>
+    <div class="note">EnVol EFB — aide à la décision <b>non certifiée</b>. Le commandant de bord reste seul responsable. Base aérodromes : OurAirports (domaine public). Cartes VAC : SIA (Licence Ouverte Etalab).</div></div>`;
+  document.getElementById("setNotif").onclick=reqNotif;
+  document.getElementById("setReset").onclick=()=>{ if(confirm("Réinitialiser le vol en cours ?")){ chronoReset(); state.chk={}; state.navlog=[]; if(state.fuelMgmt){ state.fuelMgmt.active=false; state.fuelMgmt.lowPrompted=false; } saveState(); currentTab="home"; render(); } };
 }
 /* ---- PROFIL & MÉTÉO ---- */
+function _hav(a,b,c,d){ const R=6371,t=x=>x*Math.PI/180; const dla=t(c-a),dlo=t(d-b); const s=Math.sin(dla/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dlo/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
+function nearbyICAOs(icao,n){ const a=lookupAirport(icao); if(!a) return []; const arr=[]; for(const k in AIRPORTS){ if(k===icao) continue; const b=AIRPORTS[k]; if(b.la==null||b.lo==null) continue; arr.push([k,_hav(a.la,a.lo,b.la,b.lo)]); } arr.sort((x,y)=>x[1]-y[1]); return arr.slice(0,n).map(x=>x[0]); }
+async function wxText(url){
+  const tries=[url,"https://corsproxy.io/?url="+encodeURIComponent(url),"https://api.allorigins.win/raw?url="+encodeURIComponent(url)];
+  for(const u of tries){ try{ const r=await fetch(u,{cache:'no-store'}); if(r.ok){ const t=await r.text(); if(t&&t.trim()) return t.trim(); } }catch(e){} }
+  return "";
+}
+async function metarsJSON(ids){
+  const url="https://aviationweather.gov/api/data/metar?ids="+encodeURIComponent(ids)+"&format=json";
+  const t=await wxText(url); if(!t) return [];
+  try{ const j=JSON.parse(t); if(Array.isArray(j)) return j.map(o=>({id:(o.icaoId||'').toUpperCase(),raw:o.rawOb||''})).filter(o=>o.raw); }catch(e){}
+  return t.split("\n").map(s=>s.trim()).filter(Boolean).map(s=>({id:(s.split(/\s+/)[0]||'').toUpperCase(),raw:s}));
+}
 async function fetchWx(icao){
   icao=(icao||'').toUpperCase().trim();
-  const base="https://aviationweather.gov/api/data/";
-  async function get(u){ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw 0; return (await r.text()); }
-  async function tryBoth(path){
-    try{ const t=await get(base+path); if(t && t.trim()) return t.trim(); }catch(e){}
-    try{ const t=await get("https://api.allorigins.win/raw?url="+encodeURIComponent(base+path)); if(t && t.trim()) return t.trim(); }catch(e){}
-    return "";
-  }
-  const metarTxt=await tryBoth("metar?ids="+icao+"&format=raw&taf=false");
-  const tafTxt=await tryBoth("taf?ids="+icao+"&format=raw");
-  const metar=metarTxt?(metarTxt.split("\n").map(s=>s.trim()).find(s=>s.toUpperCase().startsWith(icao))||metarTxt.split("\n")[0].trim()):"";
-  return { metar:metar, taf:tafTxt };
+  const ml=await metarsJSON(icao);
+  const metar=(ml.find(o=>o.id===icao)||ml[0]||{}).raw||'';
+  let taf=""; const tt=await wxText("https://aviationweather.gov/api/data/taf?ids="+encodeURIComponent(icao)+"&format=json");
+  if(tt){ try{ const j=JSON.parse(tt); if(Array.isArray(j)&&j[0]) taf=j[0].rawTAF||''; }catch(e){ taf=tt.split("\n")[0]; } }
+  let nearby=[]; const near=nearbyICAOs(icao,6); if(near.length){ const nl=await metarsJSON(near.join(",")); nearby=nl.filter(o=>o.id!==icao).slice(0,4); }
+  return { metar:metar, taf:taf, nearby:nearby };
 }
 function parseMetar(raw){ const o={}; let m;
   m=raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b/); if(m){ o.windDir=m[1]==='VRB'?'':parseInt(m[1],10); o.windSpd=parseInt(m[2],10); }
@@ -624,7 +721,7 @@ async function doWx(which){
   if(st) st.innerHTML='<span class="pill warn">Recherche '+esc(icao)+'\u2026</span>';
   let wx; try{ wx=await fetchWx(icao); }catch(e){ wx={metar:'',taf:''}; }
   if(!wx.metar && !wx.taf){ if(st) st.innerHTML='<span class="pill warn">Indisponible (hors-ligne / bloqu\u00e9) \u2014 colle le METAR ci-dessous</span>'; return; }
-  if(which==='dep'){ state.meteo.rawDep=wx.metar; state.meteo.tafDep=wx.taf; } else { state.meteo.rawArr=wx.metar; state.meteo.tafArr=wx.taf; }
+  if(which==='dep'){ state.meteo.rawDep=wx.metar; state.meteo.tafDep=wx.taf; state.meteo.nearbyDep=wx.nearby||[]; } else { state.meteo.rawArr=wx.metar; state.meteo.tafArr=wx.taf; state.meteo.nearbyArr=wx.nearby||[]; }
   if(wx.metar) applyMetar(parseMetar(wx.metar));
   saveState(); renderProfil();
 }
@@ -632,6 +729,7 @@ function renderProfil(){
 
   const p=P(),m=state.meteo,ad=p.aerodrome;
   main.innerHTML=`
+  <div class="eyebrow">Vol &amp; météo</div>
   <div class="card"><h2>Avion</h2>
     <div class="kv"><span class="k">Type</span><span class="v">${p.type}</span></div>
     <div class="kv"><span class="k">Immatriculation</span><span class="v">${p.immat}</span></div>
@@ -654,6 +752,8 @@ function renderProfil(){
     ${m.tafDep?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafDep)}</div>`:''}
     ${m.rawArr?`<h3>${esc(m.arr||'Destination')}</h3><div class="mono">${esc(m.rawArr)}</div>`:''}
     ${m.tafArr?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafArr)}</div>`:''}
+    ${(m.nearbyDep&&m.nearbyDep.length)?`<h3>Stations proches — ${esc(m.dep||'départ')}</h3>`+m.nearbyDep.map(o=>`<div class="mono" style="opacity:.85">${esc(o.raw)}</div>`).join(''):''}
+    ${(m.nearbyArr&&m.nearbyArr.length)?`<h3>Stations proches — ${esc(m.arr||'destination')}</h3>`+m.nearbyArr.map(o=>`<div class="mono" style="opacity:.85">${esc(o.raw)}</div>`).join(''):''}
     <h3>Coller un METAR (hors-ligne)</h3>
     <textarea id="wxPaste" rows="2" placeholder="LFPA 121200Z 24008KT 9999 FEW040 18/09 Q1018" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--ink);font-family:monospace;font-size:13px"></textarea>
     <button class="btn ghost" id="wxDecode" style="margin-top:8px">Décoder &#8594; vent / temp / QNH</button>
@@ -686,6 +786,7 @@ function renderWB(){
   const p=P().wb,i=wbInputs(),r=computeWB();
   const valid=wbValid(), overMax=r.mass>r.maxWeight+0.5, fuelTot=i.fuelLeft+i.fuelRight;
   main.innerHTML=`
+  ${segDevis('wb')}
   <div class="card"><h2>Vue de dessus — appuyer pour saisir</h2>
     <div class="planewrap">${planeSVG(i)}</div>
     <div class="note" style="margin-top:6px">Sièges / bagages en <b>kg</b>. Carburant par aile en <b>litres</b> (densité ${P().fuelDensity} kg/L).</div></div>
@@ -766,7 +867,7 @@ function planeSVG(i){
       +`background:${set?'rgba(61,220,151,.20)':'rgba(20,28,40,.10)'};">${txt}</div>`;
   }
   const kg=v=>v>0?fmt(v)+' kg':'+', L=v=>v>0?fmt(v)+' L':'+';
-  return `<div style="position:relative;width:100%;max-width:360px;margin:0 auto">`
+  return `<div style="position:relative;width:100%;max-width:440px;margin:0 auto">`
     +`<img src="${PLANE_IMG}" alt="Vue de dessus PA-28" style="width:100%;display:block;border-radius:14px">`
     +zone('fuelL',29,31,9,13,L(i.fuelLeft),i.fuelLeft>0)
     +zone('fuelR',62,31,9,13,L(i.fuelRight),i.fuelRight>0)
@@ -787,7 +888,7 @@ function envelopeSVG(r){
   const towIn=pointInPoly(r.cg,r.mass,poly), zfwIn=r.zfMass>0?pointInPoly(r.zfCG,r.zfMass,poly):true;
   const tow=r.mass>0?`<circle cx="${sx(r.cg)}" cy="${sy(r.mass)}" r="6" fill="${towIn?'#3ddc97':'#ff4d4d'}" stroke="#06210f"/>`:"";
   const zfw=r.zfMass>0?`<circle cx="${sx(r.zfCG)}" cy="${sy(r.zfMass)}" r="5" fill="${zfwIn?'#39b0ff':'#ff4d4d'}" stroke="#04121f"/>`:"";
-  const link=(r.mass>0&&r.zfMass>0)?`<line x1="${sx(r.zfCG)}" y1="${sy(r.zfMass)}" x2="${sx(r.cg)}" y2="${sy(r.mass)}" stroke="#cbd5e6" stroke-width="2" stroke-dasharray="4 3"/>`:"";
+  const link=(r.mass>0&&r.zfMass>0)?`<line x1="${sx(r.zfCG)}" y1="${sy(r.zfMass)}" x2="${sx(r.cg)}" y2="${sy(r.mass)}" stroke="#5b6675" stroke-width="2" stroke-dasharray="4 3"/>`:"";
   return `<svg viewBox="0 0 ${W} ${H}" width="100%">${grid}
     <polygon points="${pts}" fill="rgba(61,220,151,.10)" stroke="#3ddc97" stroke-width="2.5"/>
     <line x1="${pad}" y1="${pad-6}" x2="${pad}" y2="${H-pad}" stroke="#3a4658"/>
@@ -893,7 +994,7 @@ document.getElementById("fuelpopHide").onclick=()=>fuelpop.classList.add("hide")
 /* ---- PERFORMANCES ---- */
 function renderPerf(){
   if(!wbValid()){
-    main.innerHTML=`<div class="card"><h2>Performances verrouillées</h2>
+    main.innerHTML=`${segDevis('perf')}<div class="card"><h2>Performances verrouillées</h2>
       <div style="text-align:center;padding:20px"><div class="pill bad flash" style="font-size:16px;padding:10px 18px">CENTRAGE NON VALIDE</div>
       <p class="note" style="margin-top:14px">Corrigez la masse &amp; centrage pour déverrouiller les performances.</p></div></div>`; return;
   }
@@ -901,6 +1002,7 @@ function renderPerf(){
   const r=computePerf(),p=P();
   const surfOpts=Object.keys(p.perf.surfaceFactors).map(s=>`<option ${state.perf.surface===s?'selected':''}>${s}</option>`).join("");
   main.innerHTML=`
+  ${segDevis('perf')}
   <div class="card"><h2>Terrain &amp; piste</h2>
     <label class="fld">Aérodrome (OACI)<input id="pIcao" value="${esc(state.perf.icao)}" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="LFPA"></label>
     <div class="kv" style="margin-top:8px"><span class="k">Terrain</span><span class="v" id="pAptName">—</span></div>
@@ -982,10 +1084,11 @@ function allPhases(){ return [...P().checklists,...P().emergencies]; }
 function renderChk(){
   const p=P(); if(!chkPhase) chkPhase=p.checklists[0].id;
   const phase=allPhases().find(x=>x.id===chkPhase);
-  const tabs=p.checklists.map(c=>`<button data-ph="${c.id}" class="${c.id===chkPhase?'on':''}">${c.title}</button>`).join("")
+  const tabs=p.checklists.map(c=>`<button data-ph="${c.id}" class="${phaseComplete(c.id)?'valid':''} ${c.id===chkPhase?'on':''}">${c.title}</button>`).join("")
     +p.emergencies.map(c=>`<button data-ph="${c.id}" class="urg ${c.id===chkPhase?'on':''}">${c.title}</button>`).join("");
   const validated=!!(state.chk[chkPhase]&&state.chk[chkPhase].done);
   main.innerHTML=`
+  <div class="eyebrow">Checklists</div>
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
       <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
@@ -1006,7 +1109,7 @@ function renderChk(){
   const list=document.getElementById("chkList"); let html="";
   phase.items.forEach((it)=>{
     if(it.action===""){ html+=`<div class="muted" style="font-weight:800;font-size:12px;letter-spacing:.5px;margin:10px 0 6px;color:var(--accent2)">${esc(it.item)}</div>`; return; }
-    html+=`<div class="chk-item ro ${validated?'done':''}"><div class="box">&#10003;</div>
+    html+=`<div class="chk-item ro ${validated?'done':''}">
       <div class="txt"><b>${esc(it.item)}</b><span>${esc(it.action)}</span></div></div>`;
   });
   list.innerHTML=html;
@@ -1150,6 +1253,7 @@ function renderNav(){
   const nl=state.navlog||[];
   const legs=nl.map((L,i)=>legCard(L,i)).join("");
   main.innerHTML=`
+  <div class="eyebrow">Navigation</div>
   <div class="card"><h2>Plan de vol VFR</h2>
     <div class="kv"><span class="k">Route</span><span class="v">${esc(state.meteo.dep||'\u2014')} \u2192 ${esc(state.meteo.arr||'\u2014')}</span></div>
     <div class="note" style="margin-top:6px">Renseignez chaque branche : point, cap, altitude, distance, temps, observations. Les coordonnées GPS sont facultatives (alertes de passage).</div></div>
@@ -1182,7 +1286,7 @@ function legCard(L,i){
       <label class="span2">Observations<input id="leg${i}obs" value="${esc(L.obs)}" placeholder="fr\u00e9quence, points, remarques"></label>
     </div></div>`;
 }
-function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; saveState(); }); }
+function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; if(f==='wpt'){ const m=el.value.toUpperCase().match(/\b(LF[A-Z]{2}|[A-Z]{4})\b/); if(m){ const a=lookupAirport(m[1]); if(a){ state.navlog[i].lat=a.la; state.navlog[i].lon=a.lo; const la=document.getElementById('leg'+i+'lat'),lo=document.getElementById('leg'+i+'lon'); if(la) la.value=a.la; if(lo) lo.value=a.lo; } } } saveState(); }); }
 function updateNavGps(){
   if(currentTab!=='nav') return;
   const g=document.getElementById('navGps'); if(g) g.textContent=gpsActive?'actif':'inactif';
@@ -1197,6 +1301,7 @@ function renderCard(){
   const p=P(),r=computeWB(),valid=wbValid();
   const chkDone=p.checklists.every(ph=>phaseComplete(ph.id));
   main.innerHTML=`
+  <div class="eyebrow">Carnet de vol</div>
   <div class="card"><h2>Datacard de vol — ${p.immat}</h2>
     <label class="fld">Commandant de bord (PIC)<input id="picName" value="${esc(state.pic)}" placeholder="Nom du PIC" style="text-transform:none"></label>
     <div class="kv" style="margin-top:8px"><span class="k">Masse / CG décollage</span><span class="v">${fmt(r.mass)} kg @ ${r.cg.toFixed(3)} m</span></div>
@@ -1221,7 +1326,7 @@ let sigCanvas,sigCtx,sigDrawing=false;
 function setupSigPad(){
   sigCanvas=document.getElementById("sigpad"); const ratio=window.devicePixelRatio||1;
   const rect=sigCanvas.getBoundingClientRect(); sigCanvas.width=rect.width*ratio; sigCanvas.height=rect.height*ratio;
-  sigCtx=sigCanvas.getContext("2d"); sigCtx.scale(ratio,ratio); sigCtx.lineWidth=2.4; sigCtx.lineCap="round"; sigCtx.strokeStyle="#0a0e14";
+  sigCtx=sigCanvas.getContext("2d"); sigCtx.scale(ratio,ratio); sigCtx.lineWidth=2.4; sigCtx.lineCap="round"; sigCtx.strokeStyle="#eee9df";
   if(state.sig){ const img=new Image(); img.onload=()=>sigCtx.drawImage(img,0,0,rect.width,rect.height); img.src=state.sig; }
   const pos=e=>{const rc=sigCanvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-rc.left,y:t.clientY-rc.top};};
   const start=e=>{e.preventDefault();sigDrawing=true;const pt=pos(e);sigCtx.beginPath();sigCtx.moveTo(pt.x,pt.y);};
@@ -1270,7 +1375,7 @@ function bindInput(id,fn,live,after){
 /* ---- PWA ---- */
 (function(){
   const manifest={ name:"EnVol EFB — F-GRLA", short_name:"EnVol EFB", start_url:".", scope:".",
-    display:"standalone", background_color:"#0a0e14", theme_color:"#0a0e14",
+    display:"standalone", background_color:"#eee9df", theme_color:"#eee9df",
     icons:[ {src:"data:image/png;base64,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",sizes:"512x512",type:"image/png",purpose:"any maskable"},
             {src:"data:image/png;base64,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",sizes:"180x180",type:"image/png"} ] };
   const link=document.createElement("link"); link.rel="manifest";
@@ -1285,6 +1390,8 @@ function bindInput(id,fn,live,after){
 /* ---- DÉMARRAGE ---- */
 document.getElementById("chrono").onclick=()=>{ currentTab="wb"; render(); };
 document.getElementById("homeBtn").onclick=()=>{ currentTab="home"; render(); };
+document.getElementById("settingsBtn").onclick=()=>{ currentTab="settings"; render(); };
+document.getElementById("carnetBtn").onclick=()=>{ currentTab="card"; render(); };
 document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
 document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacview").classList.add("hide"); document.getElementById("vacFrame").src="about:blank"; };
 document.getElementById("pdfPrint").onclick=()=>window.print();
