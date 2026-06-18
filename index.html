@@ -1481,7 +1481,7 @@ function exportPDF(){
   h+='<h3>Masse &amp; centrage</h3><table><tr><th>Poste</th><th style="text-align:right">Masse (kg)</th><th style="text-align:right">Bras (m)</th><th style="text-align:right">Moment</th></tr>'+rows
     +'<tr style="font-weight:bold"><td>TOTAL D\u00c9COLLAGE</td><td style="text-align:right">'+fmt(r.mass)+'</td><td style="text-align:right">'+r.cg.toFixed(3)+'</td><td style="text-align:right">'+fmt(r.moment)+'</td></tr></table>';
   h+='<div class="box">Centrage : <b class="'+(valid?'ok':'bad')+'">'+(valid?"DANS L'ENVELOPPE":'HORS ENVELOPPE')+'</b> | MTOW '+r.maxWeight+' kg | ZFW '+fmt(r.zfMass)+' kg @ '+r.zfCG.toFixed(3)+' m | Carburant '+fmt(r.fuelL)+' L</div>';
-  h+='<h3>Enveloppe de centrage</h3><div class="box" style="text-align:center">'+envelopeSVG(r)+'</div>';
+  h+='<h3>Enveloppe de centrage</h3><div class="box" style="text-align:center"><div style="max-width:300px;margin:0 auto">'+envelopeSVG(r)+'</div></div>';
   if(perf){ h+='<h3>Performances</h3><table>'
     +'<tr><th>Décollage</th><td>'+esc(perf.to.icao||'?')+' QFU '+esc(perf.to.qfu||'?')+' ('+(perf.to.hdg!=null?perf.to.hdg+'°':'—')+') — '+esc(perf.to.surface)+'</td><th>Atterrissage</th><td>'+esc(perf.ldg.icao||'?')+' QFU '+esc(perf.ldg.qfu||'?')+' ('+(perf.ldg.hdg!=null?perf.ldg.hdg+'°':'—')+') — '+esc(perf.ldg.surface)+'</td></tr>'
     +'<tr><th>Vent / alt. densité</th><td>'+(perf.to.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.to.wc.head).toFixed(0)+' kt · '+perf.to.da+' ft</td><th>Vent / alt. densité</th><td>'+(perf.ldg.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.ldg.wc.head).toFixed(0)+' kt · '+perf.ldg.da+' ft</td></tr>'
