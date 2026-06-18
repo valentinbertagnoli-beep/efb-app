@@ -222,6 +222,20 @@
   .qa{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-weight:800;font-size:12.5px;color:var(--ink);cursor:pointer;min-height:82px;justify-content:center;text-align:center;}
   .qa:active{background:var(--panel2);}
   .qa .qi{font-size:24px;}
+
+  .navtbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .navtbl{width:100%;border-collapse:collapse;font-size:14px;}
+  .navtbl th{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:800;text-align:left;padding:6px 5px;border-bottom:2px solid var(--line);}
+  .navtbl td{padding:4px 4px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .navtbl td.nr{color:var(--muted);font-weight:800;width:22px;text-align:center;}
+  .navtbl th:nth-child(3),.navtbl th:nth-child(4),.navtbl th:nth-child(5),.navtbl th:nth-child(6){width:54px;}
+  .navtbl th:last-child{width:46px;}
+  .navtbl input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 7px;color:var(--ink);font-size:14px;font-weight:600;}
+  .navtbl input.nnum{text-align:center;font-variant-numeric:tabular-nums;}
+  .navtbl input:focus{outline:2px solid var(--accent2);border-color:var(--accent2);}
+  .navtbl tfoot td{font-weight:800;color:var(--ink);border-bottom:none;padding-top:8px;font-variant-numeric:tabular-nums;}
+  .navtbl .lgx{background:var(--panel2);border:1px solid var(--line);border-radius:9px;min-width:40px;min-height:40px;font-size:18px;line-height:1;cursor:pointer;color:var(--ink);}
+  .navtbl tr.legdet td{background:var(--panel2);}
 </style>
 </head>
 <body>
@@ -497,7 +511,7 @@ function defaultState(){
   return { acft:"F-GRLA",
     meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[] },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
-    perf:{ surface:"Sèche/Dur", qfu:"10", toda:"", lda:"", mode:"estim", manTO:"", manLDG:"", icao:"", rwy:"" },
+    perf:{ mode:"estim", to:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""}, ldg:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""} },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
     chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
     compteur:{ entree:"", sortie:"" },
@@ -568,33 +582,32 @@ function wbValid(){
 function isaTempC(altFt){ return 15-1.98*(altFt/1000); }
 function pressureAltFt(elevFt,qnh){ return elevFt+(1013.25-num(qnh,1013))*27; }
 function densityAltFt(elevFt,qnh,oatC){ const pa=pressureAltFt(elevFt,qnh); return pa+120*(num(oatC,15)-isaTempC(pa)); }
-function qfuHeading(){ const q=parseInt(state.perf.qfu,10); if(!isFinite(q)) return null; let h=(q%36)*10; if(h===0&&q!==0) h=360; return h; }
+function qfuHead(q){ q=parseInt(q,10); if(!isFinite(q)) return null; let h=(q%36)*10; if(h===0&&q!==0) h=360; return h; }
+function normPerf(){ const sf=P().perf.surfaceFactors, def=Object.keys(sf)[0]||"Sèche/Dur"; if(!state.perf) state.perf={}; if(state.perf.mode!=="manuel") state.perf.mode="estim"; ["to","ldg"].forEach(k=>{ const o=state.perf[k]; if(!o||typeof o!=="object") state.perf[k]={icao:"",qfu:"",surface:def,dist:"",man:""}; }); if(!state.perf.to.icao) state.perf.to.icao=((state.meteo.dep||P().aerodrome.icao||"")+"").toUpperCase(); if(!state.perf.ldg.icao) state.perf.ldg.icao=((state.meteo.arr||"")+"").toUpperCase(); }
 function windComponents(rwyHdg,windDir,windSpd){
   if(rwyHdg==null||windDir==="VRB"||windDir===""||windDir==null) return {head:0,cross:0,xdir:"—"};
   const ang=(num(windDir)-num(rwyHdg))*Math.PI/180;
   const head=num(windSpd)*Math.cos(ang), cross=num(windSpd)*Math.sin(ang);
   return { head, cross:Math.abs(cross), xdir:cross>=0?"droite":"gauche" };
 }
-function computePerf(){
-  const p=P(),pf=p.perf,ad=p.aerodrome,wb=computeWB();
-  const apt=lookupAirport(state.perf.icao);
-  const elevFt=(apt&&apt.e!=null)?apt.e:ad.elevFt;
+function perfPhase(kind){
+  const p=P(),pf=p.perf,wb=computeWB(),ph=state.perf[kind];
+  const apt=lookupAirport(ph.icao);
+  const elevFt=(apt&&apt.e!=null)?apt.e:p.aerodrome.elevFt;
   const oat=num(state.meteo.temp,isaTempC(0)), qnh=num(state.meteo.qnh,1013);
-  const da=densityAltFt(elevFt,qnh,oat), hdg=qfuHeading();
+  const da=densityAltFt(elevFt,qnh,oat), hdg=qfuHead(ph.qfu);
   const wc=windComponents(hdg,state.meteo.windDir,state.meteo.windSpd);
-  const surfFactor=pf.surfaceFactors[state.perf.surface]||1;
-  function dist(kind){
-    const ref=kind==="to"?pf.takeoff:pf.landing; let base;
-    if(state.perf.mode==="manuel"){ base=num(kind==="to"?state.perf.manTO:state.perf.manLDG,0); if(base<=0) base=ref.base50ft_m; }
-    else { base=ref.base50ft_m*(1+pf.kPer1000ft*(da/1000))*(1+pf.kPerKgOverRef*Math.max(0,wb.mass-ref.refMass)); }
-    if(wc.head>=0) base*=(1-pf.kHeadwindPerKt*wc.head); else base*=(1+pf.kTailwindPerKt*Math.abs(wc.head));
-    base*=surfFactor*pf.safetyMargin;
-    return Math.max(0,Math.round(base));
-  }
-  const toDist=dist("to"),ldgDist=dist("ldg"),toda=num(state.perf.toda,0),lda=num(state.perf.lda,0);
-  return { da:Math.round(da),pa:Math.round(pressureAltFt(elevFt,qnh)),elevFt,aptName:(apt?apt.n:ad.name),oat,qnh,hdg,wc,surfFactor,
-    toDist,ldgDist,toda,lda,wb, toOK:toda>0?toDist<=toda:null, ldgOK:lda>0?ldgDist<=lda:null, speeds:p.speeds };
+  const surfFactor=pf.surfaceFactors[ph.surface]||1;
+  const ref=kind==='to'?pf.takeoff:pf.landing; let base;
+  if(state.perf.mode==='manuel'){ base=num(ph.man,0); if(base<=0) base=ref.base50ft_m; }
+  else { base=ref.base50ft_m*(1+pf.kPer1000ft*(da/1000))*(1+pf.kPerKgOverRef*Math.max(0,wb.mass-ref.refMass)); }
+  if(wc.head>=0) base*=(1-pf.kHeadwindPerKt*wc.head); else base*=(1+pf.kTailwindPerKt*Math.abs(wc.head));
+  base*=surfFactor*pf.safetyMargin;
+  const dist=Math.max(0,Math.round(base)), avail=num(ph.dist,0);
+  return { icao:ph.icao, apt, aptName:(apt?apt.n:'(inconnu)'), elevFt, da:Math.round(da), pa:Math.round(pressureAltFt(elevFt,qnh)),
+    hdg, wc, surfFactor, surface:ph.surface, qfu:ph.qfu, dist, avail, ok:avail>0?dist<=avail:null };
 }
+function computePerf(){ normPerf(); return { to:perfPhase('to'), ldg:perfPhase('ldg'), wb:computeWB(), speeds:P().speeds, oat:num(state.meteo.temp,isaTempC(0)), qnh:num(state.meteo.qnh,1013) }; }
 
 /* ===== RENDER ===== */
 function goTab(t){ if(t==='perf'&&!wbValid()) return; currentTab=t; render(); }
@@ -998,84 +1011,82 @@ function renderPerf(){
       <div style="text-align:center;padding:20px"><div class="pill bad flash" style="font-size:16px;padding:10px 18px">CENTRAGE NON VALIDE</div>
       <p class="note" style="margin-top:14px">Corrigez la masse &amp; centrage pour déverrouiller les performances.</p></div></div>`; return;
   }
-  if(!state.perf.icao) state.perf.icao=(state.meteo.dep||P().aerodrome.icao);
-  const r=computePerf(),p=P();
-  const surfOpts=Object.keys(p.perf.surfaceFactors).map(s=>`<option ${state.perf.surface===s?'selected':''}>${s}</option>`).join("");
+  normPerf();
+  const r=computePerf(), p=P();
   main.innerHTML=`
   ${segDevis('perf')}
-  <div class="card"><h2>Terrain &amp; piste</h2>
-    <label class="fld">Aérodrome (OACI)<input id="pIcao" value="${esc(state.perf.icao)}" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="LFPA"></label>
-    <div class="kv" style="margin-top:8px"><span class="k">Terrain</span><span class="v" id="pAptName">—</span></div>
-    <div class="kv"><span class="k">Altitude</span><span class="v" id="pAptElev">—</span></div>
-    <div class="note" style="margin:8px 0 4px">Choisir la piste → remplit QFU, longueur (TODA/LDA) et surface :</div>
-    <div class="rwybtns" id="pRwys"></div></div>
-  ${vacCard(state.perf.icao)}
-  <div class="card"><h2>Conditions retenues</h2>
-    <div class="kv"><span class="k">OAT / QNH</span><span class="v">${r.oat} °C / ${r.qnh} hPa</span></div>
-    <div class="kv"><span class="k">Alt. pression / densité</span><span class="v" id="pAlt">${r.pa} ft / ${r.da} ft</span></div>
-    <div class="kv"><span class="k">Masse décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>
+  <div class="card"><h2>Conditions</h2>
+    <div class="kv"><span class="k">OAT / QNH</span><span class="v">${r.oat} °C / ${r.qnh} hPa <span class="muted" style="font-weight:600">(onglet Vol)</span></span></div>
+    <div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>
     <div class="row" style="margin-top:10px">
-      <label class="fld">QFU piste (ex. 28)<input id="qfu" inputmode="numeric" value="${esc(state.perf.qfu)}" placeholder="28"></label>
-      <label class="fld">État piste<select id="surf">${surfOpts}</select></label>
-    </div>
-    <div class="kv" style="margin-top:10px"><span class="k">Cap piste</span><span class="v" id="pCap"></span></div>
-    <div class="kv"><span class="k">Vent / piste</span><span class="v" id="pVent"></span></div></div>
-  <div class="card"><h2>Mode de calcul</h2>
-    <div class="row">
       <button class="btn ${state.perf.mode==='estim'?'accent':'ghost'}" id="modeEstim">Pré-estimation</button>
       <button class="btn ${state.perf.mode==='manuel'?'accent':'ghost'}" id="modeManuel">Saisie abaque</button>
     </div>
-    ${state.perf.mode==='manuel'?`<div class="row" style="margin-top:10px">
-        <label class="fld">Décollage 50 ft lu (m)<input id="manTO" inputmode="numeric" value="${esc(state.perf.manTO)}" placeholder="640"></label>
-        <label class="fld">Atterrissage 50 ft lu (m)<input id="manLDG" inputmode="numeric" value="${esc(state.perf.manLDG)}" placeholder="363"></label></div>`:''}</div>
-  <div class="card"><h2>Distances requises</h2>
-    <div class="grid2">
-      <div><div class="muted" style="font-size:13px;font-weight:700">DÉCOLLAGE (50 ft)</div><div class="big" id="pTO"></div><span id="pTOpill"></span></div>
-      <div><div class="muted" style="font-size:13px;font-weight:700">ATTERRISSAGE (50 ft)</div><div class="big" id="pLDG"></div><span id="pLDGpill"></span></div>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <label class="fld">TODA dispo (m)<input id="toda" inputmode="numeric" value="${esc(state.perf.toda)}"></label>
-      <label class="fld">LDA dispo (m)<input id="lda" inputmode="numeric" value="${esc(state.perf.lda)}"></label></div></div>
+    <button class="btn ghost" id="perfSync" style="margin-top:10px">&#8635; Reprendre les aérodromes de la route</button></div>
+  ${perfCard('to')}
+  ${perfCard('ldg')}
+  ${vacCard(state.perf.to.icao)}
   <div class="card"><h2>Vitesses</h2>
     <div class="kv"><span class="k">Vr (rotation)</span><span class="v">${r.speeds.vr} kt</span></div>
     <div class="kv"><span class="k">Vx (pente max)</span><span class="v">${r.speeds.vx} kt</span></div>
     <div class="kv"><span class="k">Vy (taux max)</span><span class="v">${r.speeds.vy} kt</span></div>
     <div class="kv"><span class="k">Montée normale</span><span class="v">${r.speeds.climbNormal} kt</span></div>
     <div class="kv"><span class="k">Vapp (volets 40)</span><span class="v">${r.speeds.vApproachFlaps40} kt + corr. vent</span></div></div>`;
-  document.getElementById("surf").onchange=e=>{state.perf.surface=e.target.value;saveState();updatePerf();};
   document.getElementById("modeEstim").onclick=()=>{state.perf.mode='estim';saveState();renderPerf();};
   document.getElementById("modeManuel").onclick=()=>{state.perf.mode='manuel';saveState();renderPerf();};
-  bindInput("qfu",v=>state.perf.qfu=v,true,updatePerf);
-  bindInput("toda",v=>state.perf.toda=v,true,updatePerf);
-  bindInput("lda",v=>state.perf.lda=v,true,updatePerf);
-  if(state.perf.mode==='manuel'){ bindInput("manTO",v=>state.perf.manTO=v,true,updatePerf); bindInput("manLDG",v=>state.perf.manLDG=v,true,updatePerf); }
-  const pi=document.getElementById("pIcao");
-  pi.addEventListener('input',()=>{ state.perf.icao=pi.value.toUpperCase(); saveState(); refreshAptUI(); });
-  pi.addEventListener('change',renderPerf);
-  refreshAptUI();
+  document.getElementById("perfSync").onclick=()=>{ state.perf.to.icao=((state.meteo.dep||'')+'').toUpperCase(); state.perf.ldg.icao=((state.meteo.arr||'')+'').toUpperCase(); saveState(); renderPerf(); };
+  ['to','ldg'].forEach(k=>bindPhase(k));
   bindVac();
   updatePerf();
 }
-function refreshAptUI(){
-  const apt=lookupAirport(state.perf.icao);
-  const nm=document.getElementById('pAptName'), el=document.getElementById('pAptElev'), box=document.getElementById('pRwys');
+function perfCard(kind){
+  const ph=state.perf[kind], isTO=kind==='to';
+  const title=isTO?'Décollage — aérodrome de départ':'Atterrissage — aérodrome d\u2019arrivée';
+  const surfOpts=Object.keys(P().perf.surfaceFactors).map(s=>`<option ${ph.surface===s?'selected':''}>${s}</option>`).join('');
+  return `<div class="card"><h2>${title}</h2>
+    <label class="fld">Aérodrome (OACI)<input id="${kind}_icao" value="${esc(ph.icao)}" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="${isTO?'LFPA':'LFPN'}"></label>
+    <div class="kv" style="margin-top:8px"><span class="k">Terrain</span><span class="v" id="${kind}_name">—</span></div>
+    <div class="kv"><span class="k">Altitude / densité</span><span class="v" id="${kind}_alt">—</span></div>
+    <div class="note" style="margin:8px 0 4px">Choisir la piste → QFU, ${isTO?'TODA':'LDA'} et surface :</div>
+    <div class="rwybtns" id="${kind}_rwys"></div>
+    <div class="row" style="margin-top:10px">
+      <label class="fld">QFU<input id="${kind}_qfu" inputmode="numeric" value="${esc(ph.qfu)}" placeholder="28"></label>
+      <label class="fld">État piste<select id="${kind}_surf">${surfOpts}</select></label>
+    </div>
+    <div class="kv" style="margin-top:8px"><span class="k">Cap · vent piste</span><span class="v" id="${kind}_vent"></span></div>
+    ${state.perf.mode==='manuel'?`<label class="fld" style="margin-top:8px">${isTO?'Décollage':'Atterrissage'} 50 ft lu abaque (m)<input id="${kind}_man" inputmode="numeric" value="${esc(ph.man)}" placeholder="${isTO?'640':'363'}"></label>`:''}
+    <label class="fld" style="margin-top:8px">${isTO?'TODA':'LDA'} disponible (m)<input id="${kind}_dist" inputmode="numeric" value="${esc(ph.dist)}"></label>
+    <div style="margin-top:12px"><div class="muted" style="font-size:13px;font-weight:700">${isTO?'DISTANCE DÉCOLLAGE (50 ft)':'DISTANCE ATTERRISSAGE (50 ft)'}</div>
+      <div class="big" id="${kind}_dval"></div><span id="${kind}_pill"></span></div></div>`;
+}
+function bindPhase(kind){
+  const ic=document.getElementById(kind+'_icao');
+  if(ic){ ic.addEventListener('input',()=>{ state.perf[kind].icao=ic.value.toUpperCase(); saveState(); refreshApt(kind); }); ic.addEventListener('change',()=>renderPerf()); }
+  const sf=document.getElementById(kind+'_surf'); if(sf) sf.onchange=e=>{ state.perf[kind].surface=e.target.value; saveState(); updatePerf(); };
+  bindInput(kind+'_qfu', v=>state.perf[kind].qfu=v, true, updatePerf);
+  bindInput(kind+'_dist', v=>state.perf[kind].dist=v, true, updatePerf);
+  if(state.perf.mode==='manuel') bindInput(kind+'_man', v=>state.perf[kind].man=v, true, updatePerf);
+  refreshApt(kind);
+}
+function refreshApt(kind){
+  const ph=state.perf[kind], apt=lookupAirport(ph.icao);
+  const nm=document.getElementById(kind+'_name'), box=document.getElementById(kind+'_rwys');
   if(nm) nm.textContent=apt?apt.n:'(inconnu — saisie manuelle)';
-  if(el) el.textContent=(apt&&apt.e!=null)?apt.e+' ft':'—';
-  if(box){ box.innerHTML=apt?apt.r.map(rr=>`<button class="rwybtn ${state.perf.rwy===rr.r?'on':''}" data-rwy="${rr.r}" data-l="${rr.l||''}" data-s="${rr.s}">${rr.r}<small>${rr.l?rr.l+' m':'?'}</small></button>`).join(''):'<div class="note">Terrain inconnu — saisis QFU, TODA/LDA et surface à la main.</div>'; bindRwys(); }
+  if(box){ box.innerHTML=apt?apt.r.map(rr=>`<button class="rwybtn ${ph.qfu===rr.r?'on':''}" data-rwy="${rr.r}" data-l="${rr.l||''}" data-s="${rr.s}">${rr.r}<small>${rr.l?rr.l+' m':'?'}</small></button>`).join(''):'<div class="note">Terrain inconnu — saisis QFU, '+(kind==='to'?'TODA':'LDA')+' et surface à la main.</div>'; bindRwysFor(kind); }
   updatePerf();
 }
-function bindRwys(){ document.querySelectorAll('.rwybtn').forEach(b=>b.onclick=()=>{ state.perf.rwy=b.dataset.rwy; state.perf.qfu=b.dataset.rwy; const L=b.dataset.l; if(L){ state.perf.toda=L; state.perf.lda=L; } state.perf.surface=(b.dataset.s==='H')?'Herbe sèche':'Sèche/Dur'; saveState(); renderPerf(); }); }
+function bindRwysFor(kind){ document.querySelectorAll('#'+kind+'_rwys .rwybtn').forEach(b=>b.onclick=()=>{ const ph=state.perf[kind]; ph.qfu=b.dataset.rwy; const L=b.dataset.l; if(L) ph.dist=L; ph.surface=(b.dataset.s==='H')?'Herbe sèche':'Sèche/Dur'; saveState(); renderPerf(); }); }
 function updatePerf(){
   if(currentTab!=='perf'||!wbValid()) return;
   const r=computePerf();
   const set=(id,h)=>{const el=document.getElementById(id); if(el) el.innerHTML=h;};
-  set('pAlt', r.pa+' ft / '+r.da+' ft');
-  set('pCap', r.hdg!=null?r.hdg+'°':'—');
-  set('pVent', r.hdg==null?'QFU ?':(r.wc.head>=0?'face':'ARRIÈRE')+' '+Math.abs(r.wc.head).toFixed(0)+' kt · travers '+r.wc.cross.toFixed(0)+' kt '+r.wc.xdir);
-  const ve=document.getElementById('pVent'); if(ve) ve.style.color=r.wc.head<0?'var(--danger)':'';
-  set('pTO', r.toDist+' m'); set('pLDG', r.ldgDist+' m');
-  set('pTOpill', r.toOK===null?'':`<span class="pill ${r.toOK?'ok':'bad'}">${r.toOK?'≤ TODA':'> TODA'}</span>`);
-  set('pLDGpill', r.ldgOK===null?'':`<span class="pill ${r.ldgOK?'ok':'bad'}">${r.ldgOK?'≤ LDA':'> LDA'}</span>`);
+  ['to','ldg'].forEach(kind=>{ const ph=r[kind];
+    set(kind+'_alt', ph.elevFt+' ft · densité '+ph.da+' ft');
+    set(kind+'_vent', ph.hdg==null?'QFU ?':(ph.hdg+'° · '+(ph.wc.head>=0?'face':'ARRIÈRE')+' '+Math.abs(ph.wc.head).toFixed(0)+' kt · travers '+ph.wc.cross.toFixed(0)+' kt '+ph.wc.xdir));
+    const ve=document.getElementById(kind+'_vent'); if(ve) ve.style.color=ph.wc.head<0?'var(--danger)':'';
+    set(kind+'_dval', ph.dist+' m');
+    set(kind+'_pill', ph.ok===null?'':`<span class="pill ${ph.ok?'ok':'bad'}">${ph.ok?(kind==='to'?'≤ TODA':'≤ LDA'):(kind==='to'?'> TODA':'> LDA')}</span>`);
+  });
 }
 
 /* ---- CHECKLISTS ---- */
@@ -1089,12 +1100,6 @@ function renderChk(){
   const validated=!!(state.chk[chkPhase]&&state.chk[chkPhase].done);
   main.innerHTML=`
   <div class="eyebrow">Checklists</div>
-  <div class="card"><h2>Compteur horamètre</h2>
-    <div class="row">
-      <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
-      <label class="fld">Compteur sortie<input id="cptSortie" inputmode="decimal" value="${esc(state.compteur.sortie)}" placeholder="1000.50"></label>
-    </div>
-    <div class="kv" style="margin-top:8px"><span class="k">Temps de vol (compteur)</span><span class="v" id="cptDelta">—</span></div></div>
   <div class="card"><h2>Checklists — ${esc(phase.title)}</h2>
     <div class="chk-tabs">${tabs}</div>
     ${phase.info?`<div class="chk-info">${esc(phase.info)}</div>`:""}
@@ -1116,11 +1121,6 @@ function renderChk(){
   document.querySelectorAll(".chk-tabs button").forEach(b=>b.onclick=()=>{chkPhase=b.dataset.ph;renderChk();});
   document.getElementById("chkValide").onclick=()=>{ state.chk[chkPhase]=state.chk[chkPhase]||{}; state.chk[chkPhase].done=!state.chk[chkPhase].done; saveState(); renderChk(); };
   document.getElementById("gpsBtn").onclick=toggleGPS;
-  bindInput("cptEntree",v=>state.compteur.entree=v,false);
-  bindInput("cptSortie",v=>state.compteur.sortie=v,false);
-  document.getElementById("cptEntree").addEventListener('input',updCpt);
-  document.getElementById("cptSortie").addEventListener('input',updCpt);
-  updCpt();
   // Recentrer la barre d'onglets sur la checklist sélectionnée (évite le retour à gauche)
   const bar=document.querySelector(".chk-tabs"), act=bar&&bar.querySelector("button.on");
   if(bar&&act){ const off=act.getBoundingClientRect().left-bar.getBoundingClientRect().left+bar.scrollLeft-(bar.clientWidth-act.offsetWidth)/2; bar.scrollLeft=Math.max(0,off); }
@@ -1251,40 +1251,64 @@ async function vacStatusInit(icao){ const st=document.getElementById('vacStatus'
 function renderNav(){
 
   const nl=state.navlog||[];
-  const legs=nl.map((L,i)=>legCard(L,i)).join("");
+  const legs=nl.map((L,i)=>legRow(L,i)).join("");
+  const totDist=nl.reduce((s,L)=>s+(parseFloat(L.dist)||0),0);
+  const totTime=nl.reduce((s,L)=>s+(parseFloat(L.time)||0),0);
   main.innerHTML=`
   <div class="eyebrow">Navigation</div>
   <div class="card"><h2>Plan de vol VFR</h2>
-    <div class="kv"><span class="k">Route</span><span class="v">${esc(state.meteo.dep||'\u2014')} \u2192 ${esc(state.meteo.arr||'\u2014')}</span></div>
-    <div class="note" style="margin-top:6px">Renseignez chaque branche : point, cap, altitude, distance, temps, observations. Les coordonnées GPS sont facultatives (alertes de passage).</div></div>
+    <div class="kv"><span class="k">Route</span><span class="v">${esc(state.meteo.dep||'—')} → ${esc(state.meteo.arr||'—')}</span></div></div>
+  <div class="card"><h2>Branches</h2>
+    ${nl.length?`<div class="navtbl-wrap"><table class="navtbl">
+      <thead><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Tps</th><th></th></tr></thead>
+      <tbody>${legs}</tbody>
+      <tfoot><tr><td></td><td>Total</td><td></td><td></td><td>${totDist?totDist.toFixed(0):'—'}</td><td>${totTime?totTime.toFixed(0):'—'}</td><td></td></tr></tfoot>
+    </table></div>`:'<div class="note">Aucune branche. Ajoutez la première ci-dessous.</div>'}
+    <button class="btn primary" id="addLeg" style="margin-top:12px">+ Ajouter une branche</button>
+    <div class="note" style="margin-top:8px">Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées automatiquement.</div></div>
+  <div class="card"><h2>Compteur horamètre</h2>
+    <div class="row">
+      <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
+      <label class="fld">Compteur sortie<input id="cptSortie" inputmode="decimal" value="${esc(state.compteur.sortie)}" placeholder="1000.50"></label>
+    </div>
+    <div class="kv" style="margin-top:8px"><span class="k">Temps de vol (compteur)</span><span class="v" id="cptDelta">—</span></div>
+    <div class="note" style="margin-top:6px">La sortie se remplit automatiquement en fin de vol (top On-block du chronomètre).</div></div>
   <div class="card"><h2>Suivi GPS</h2>
     <div class="kv"><span class="k">GPS</span><span class="v" id="navGps">${gpsActive?'actif':'inactif'}</span></div>
-    <div class="kv"><span class="k">Position</span><span class="v" id="navPos">\u2014</span></div>
-    <div class="kv"><span class="k">Vitesse sol / route</span><span class="v" id="navGs">\u2014</span></div>
-    <button class="btn accent" id="navGpsBtn" style="margin-top:8px">${gpsActive?'D\u00e9sactiver le suivi GPS':'Activer le suivi GPS'}</button>
-    <div class="note" style="margin-top:8px">Quand un point (avec coordonn\u00e9es) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
-  ${vacCard(state.meteo.dep)}
-  <div id="legs">${legs||'<div class="note" style="margin-bottom:10px">Aucune branche. Ajoutez la premi\u00e8re ci-dessous.</div>'}</div>
-  <button class="btn primary" id="addLeg">+ Ajouter une branche</button>`;
+    <div class="kv"><span class="k">Position</span><span class="v" id="navPos">—</span></div>
+    <div class="kv"><span class="k">Vitesse sol / route</span><span class="v" id="navGs">—</span></div>
+    <button class="btn accent" id="navGpsBtn" style="margin-top:8px">${gpsActive?'Désactiver le suivi GPS':'Activer le suivi GPS'}</button>
+    <div class="note" style="margin-top:8px">Quand un point (avec coordonnées) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
+  ${vacCard(state.meteo.dep)}`;
   document.getElementById("navGpsBtn").onclick=toggleGPS;
   document.getElementById("addLeg").onclick=()=>{ state.navlog.push({wpt:"",cap:"",alt:"",dist:"",time:"",obs:"",lat:"",lon:""}); navTriggered={}; saveState(); renderNav(); };
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
-    const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); }; });
+    const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); };
+    const more=document.getElementById('legMore'+i); if(more) more.onclick=()=>{ const d=document.getElementById('legDet'+i); if(d) d.classList.toggle('hide'); }; });
+  const ce=document.getElementById("cptEntree"); if(ce){ bindInput("cptEntree",v=>state.compteur.entree=v,false); ce.addEventListener('input',updCpt); }
+  const cs=document.getElementById("cptSortie"); if(cs){ bindInput("cptSortie",v=>state.compteur.sortie=v,false); cs.addEventListener('input',updCpt); }
+  updCpt();
   updateNavGps();
   bindVac();
 }
-function legCard(L,i){
-  return `<div class="leg"><div class="lh"><b>Branche ${i+1}</b><button class="btn danger" style="width:auto;min-height:38px;padding:6px 12px" id="legDel${i}">Suppr.</button></div>
+function legRow(L,i){
+  return `<tr>
+    <td class="nr">${i+1}</td>
+    <td><input id="leg${i}wpt" value="${esc(L.wpt)}" placeholder="Point"></td>
+    <td><input id="leg${i}cap" class="nnum" inputmode="numeric" value="${esc(L.cap)}"></td>
+    <td><input id="leg${i}alt" class="nnum" inputmode="numeric" value="${esc(L.alt)}"></td>
+    <td><input id="leg${i}dist" class="nnum" inputmode="decimal" value="${esc(L.dist)}"></td>
+    <td><input id="leg${i}time" class="nnum" inputmode="decimal" value="${esc(L.time)}"></td>
+    <td><button class="lgx" id="legMore${i}" title="Détails">&#8943;</button></td>
+  </tr>
+  <tr class="legdet hide" id="legDet${i}"><td></td><td colspan="6">
     <div class="grid">
-      <label class="span2">Point / branche<input id="leg${i}wpt" value="${esc(L.wpt)}" placeholder="ex. LFPA \u2192 NEVERS"></label>
-      <label>Cap (\u00b0)<input id="leg${i}cap" inputmode="numeric" value="${esc(L.cap)}"></label>
-      <label>Alt (ft)<input id="leg${i}alt" inputmode="numeric" value="${esc(L.alt)}"></label>
-      <label>Dist (NM)<input id="leg${i}dist" inputmode="decimal" value="${esc(L.dist)}"></label>
-      <label>Temps (min)<input id="leg${i}time" inputmode="decimal" value="${esc(L.time)}"></label>
       <label>Lat<input id="leg${i}lat" inputmode="decimal" value="${esc(L.lat)}" placeholder="49.16"></label>
       <label>Lon<input id="leg${i}lon" inputmode="decimal" value="${esc(L.lon)}" placeholder="2.31"></label>
-      <label class="span2">Observations<input id="leg${i}obs" value="${esc(L.obs)}" placeholder="fr\u00e9quence, points, remarques"></label>
-    </div></div>`;
+      <label class="span2">Observations<input id="leg${i}obs" value="${esc(L.obs)}" placeholder="fréquence, points, remarques"></label>
+    </div>
+    <button class="btn danger" id="legDel${i}" style="margin-top:8px;min-height:40px">Supprimer la branche ${i+1}</button>
+  </td></tr>`;
 }
 function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; if(f==='wpt'){ const m=el.value.toUpperCase().match(/\b(LF[A-Z]{2}|[A-Z]{4})\b/); if(m){ const a=lookupAirport(m[1]); if(a){ state.navlog[i].lat=a.la; state.navlog[i].lon=a.lo; const la=document.getElementById('leg'+i+'lat'),lo=document.getElementById('leg'+i+'lon'); if(la) la.value=a.la; if(lo) lo.value=a.lo; } } } saveState(); }); }
 function updateNavGps(){
@@ -1348,10 +1372,10 @@ function exportPDF(){
     +'<tr style="font-weight:bold"><td>TOTAL D\u00c9COLLAGE</td><td style="text-align:right">'+fmt(r.mass)+'</td><td style="text-align:right">'+r.cg.toFixed(3)+'</td><td style="text-align:right">'+fmt(r.moment)+'</td></tr></table>';
   h+='<div class="box">Centrage : <b class="'+(valid?'ok':'bad')+'">'+(valid?"DANS L'ENVELOPPE":'HORS ENVELOPPE')+'</b> | MTOW '+r.maxWeight+' kg | ZFW '+fmt(r.zfMass)+' kg @ '+r.zfCG.toFixed(3)+' m | Carburant '+fmt(r.fuelL)+' L</div>';
   if(perf){ h+='<h3>Performances</h3><table>'
-    +'<tr><th>QFU</th><td>'+esc(state.perf.qfu)+' ('+(perf.hdg!=null?perf.hdg+"\u00b0":"\u2014")+') \u2014 '+esc(state.perf.surface)+'</td><th>Vent</th><td>'+(perf.wc.head>=0?'face':'arri\u00e8re')+' '+Math.abs(perf.wc.head).toFixed(0)+' kt / travers '+perf.wc.cross.toFixed(0)+' kt</td></tr>'
-    +'<tr><th>Alt. densit\u00e9</th><td>'+perf.da+' ft</td><th>OAT / QNH</th><td>'+perf.oat+' \u00b0C / '+perf.qnh+' hPa</td></tr>'
-    +'<tr><th>D\u00e9collage 50 ft</th><td><b>'+perf.toDist+' m</b> '+(perf.toda>0?'/ TODA '+perf.toda:'')+'</td><th>Atterrissage 50 ft</th><td><b>'+perf.ldgDist+' m</b> '+(perf.lda>0?'/ LDA '+perf.lda:'')+'</td></tr>'
-    +'<tr><th>Vr / Vx / Vy</th><td>'+perf.speeds.vr+' / '+perf.speeds.vx+' / '+perf.speeds.vy+' kt</td><th>Vapp</th><td>'+perf.speeds.vApproachFlaps40+' kt</td></tr></table>'; }
+    +'<tr><th>Décollage</th><td>'+esc(perf.to.icao||'?')+' QFU '+esc(perf.to.qfu||'?')+' ('+(perf.to.hdg!=null?perf.to.hdg+'°':'—')+') — '+esc(perf.to.surface)+'</td><th>Atterrissage</th><td>'+esc(perf.ldg.icao||'?')+' QFU '+esc(perf.ldg.qfu||'?')+' ('+(perf.ldg.hdg!=null?perf.ldg.hdg+'°':'—')+') — '+esc(perf.ldg.surface)+'</td></tr>'
+    +'<tr><th>Vent / alt. densité</th><td>'+(perf.to.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.to.wc.head).toFixed(0)+' kt · '+perf.to.da+' ft</td><th>Vent / alt. densité</th><td>'+(perf.ldg.wc.head>=0?'face':'arrière')+' '+Math.abs(perf.ldg.wc.head).toFixed(0)+' kt · '+perf.ldg.da+' ft</td></tr>'
+    +'<tr><th>Décollage 50 ft</th><td><b>'+perf.to.dist+' m</b> '+(perf.to.avail>0?'/ TODA '+perf.to.avail:'')+'</td><th>Atterrissage 50 ft</th><td><b>'+perf.ldg.dist+' m</b> '+(perf.ldg.avail>0?'/ LDA '+perf.ldg.avail:'')+'</td></tr>'
+    +'<tr><th>OAT / QNH</th><td>'+perf.oat+' °C / '+perf.qnh+' hPa</td><th>Vr/Vx/Vy · Vapp</th><td>'+perf.speeds.vr+'/'+perf.speeds.vx+'/'+perf.speeds.vy+' · '+perf.speeds.vApproachFlaps40+' kt</td></tr></table>'; }
   h+='<h3>Conditions / route</h3><div class="box mono">Route : '+esc(state.meteo.dep||'\u2014')+' \u2192 '+esc(state.meteo.arr||'\u2014')
     +'\nVent '+esc(state.meteo.windDir)+'\u00b0 / '+esc(state.meteo.windSpd)+' kt \u2014 '+esc(state.meteo.temp)+' \u00b0C \u2014 QNH '+esc(state.meteo.qnh)+' hPa</div>';
   if(navRows) h+='<h3>Plan de vol</h3><table><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Temps</th><th>Obs.</th></tr>'+navRows+'</table>';
