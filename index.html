@@ -187,7 +187,9 @@
     #app,#gpspop,#fuelpop,#navpop,#keypad{display:none !important;}
     #pdfview{position:static;background:#fff;display:block;}
     #pdfview .pdfbar{display:none !important;}
-    #pdfdoc{margin:0;border-radius:0;padding:0;overflow:visible;}
+    #pdfdoc{margin:0;border-radius:0;padding:0;overflow:visible;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #pdfdoc .rmap{transform:none !important;}
+    #pdfdoc .rmap-wrap{height:380px !important;max-width:none !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   }
 
   /* ===== Refonte : système visuel ===== */
@@ -1487,7 +1489,7 @@ function exportPDF(){
     +'<tr><th>OAT / QNH</th><td>'+perf.oat+' °C / '+perf.qnh+' hPa</td><th>Vr/Vx/Vy · Vapp</th><td>'+perf.speeds.vr+'/'+perf.speeds.vx+'/'+perf.speeds.vy+' · '+perf.speeds.vApproachFlaps40+' kt</td></tr></table>'; }
   h+='<h3>Conditions / route</h3><div class="box mono">Route : '+esc(state.meteo.dep||'\u2014')+' \u2192 '+esc(state.meteo.arr||'\u2014')
     +'\nVent '+esc(state.meteo.windDir)+'\u00b0 / '+esc(state.meteo.windSpd)+' kt \u2014 '+esc(state.meteo.temp)+' \u00b0C \u2014 QNH '+esc(state.meteo.qnh)+' hPa</div>';
-  h+='<h3>Trajet prévu</h3><div class="box" style="text-align:center">'+routeSVG()+'</div>';
+  h+='<h3>Trajet prévu</h3><div class="box" style="text-align:center">'+routeMap()+'</div>';
   if(navRows) h+='<h3>Plan de vol</h3><table><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Temps</th><th>Obs.</th></tr>'+navRows+'</table>';
   h+='<h3>Compteur &amp; temps</h3><div class="box">Compteur entr\u00e9e : <b>'+esc(state.compteur.entree||'\u2014')+'</b> \u00b7 sortie : <b>'+esc(state.compteur.sortie||'\u2014')+'</b> \u00b7 temps compteur : <b>'+cdelta+'</b><br>Temps bloc : <b>'+fmtHMS(chBlockMs())+'</b> · Temps de vol : <b>'+fmtHMS(chAirMs())+'</b></div>';
   h+='<div class="box">Checklists normales compl\u00e9t\u00e9es : <b class="'+(chkDone?'ok':'bad')+'">'+(chkDone?'OUI':'NON')+'</b></div>';
@@ -1495,6 +1497,7 @@ function exportPDF(){
     +'<p>Sign\u00e9 \u00e9lectroniquement par le PIC <b>'+esc(state.pic||'(non renseign\u00e9)')+'</b> le <b>'+utc+'</b>.</p>';
   document.getElementById('pdfdoc').innerHTML=h;
   document.getElementById('pdfview').classList.remove('hide');
+  setTimeout(fitRouteMap,30);
 }
 
 /* ---- UTILS ---- */
