@@ -257,7 +257,8 @@
   <nav id="nav">
     <button data-tab="home" class="on"><span class="ic">&#128202;</span>Bord</button>
     <button data-tab="profil"><span class="ic">&#128747;</span>Vol</button>
-    <button data-tab="wb"><span class="ic">&#9878;</span>Masse</button>
+    <button data-tab="meteo"><span class="ic">&#127780;</span>Météo</button>
+    <button data-tab="wb"><span class="ic">&#9878;</span>Prévol</button>
     <button data-tab="chk"><span class="ic">&#9745;</span>Checklist</button>
     <button data-tab="nav"><span class="ic">&#129517;</span>Nav</button>
   </nav>
@@ -512,7 +513,7 @@ const LS_KEY="envol_efb_state_v2";
 function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
-    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[] },
+    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[], depM:null, arrM:null, corridor:[], depCond:null, arrCond:null },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ mode:"estim", to:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""}, ldg:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""} },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
@@ -597,9 +598,11 @@ function perfPhase(kind){
   const p=P(),pf=p.perf,wb=computeWB(),ph=state.perf[kind];
   const apt=lookupAirport(ph.icao);
   const elevFt=(apt&&apt.e!=null)?apt.e:p.aerodrome.elevFt;
-  const oat=num(state.meteo.temp,isaTempC(0)), qnh=num(state.meteo.qnh,1013);
+  /* météo par phase : METAR départ → décollage, METAR arrivée → atterrissage (sinon saisie Vol) */
+  const cond=(kind==='to'?state.meteo.depCond:state.meteo.arrCond)||state.meteo;
+  const oat=num(cond.temp,isaTempC(0)), qnh=num(cond.qnh,1013);
   const da=densityAltFt(elevFt,qnh,oat), hdg=qfuHead(ph.qfu);
-  const wc=windComponents(hdg,state.meteo.windDir,state.meteo.windSpd);
+  const wc=windComponents(hdg,cond.windDir,cond.windSpd);
   const surfFactor=pf.surfaceFactors[ph.surface]||1;
   const ref=kind==='to'?pf.takeoff:pf.landing; let base;
   if(state.perf.mode==='manuel'){ base=num(ph.man,0); if(base<=0) base=ref.base50ft_m; }
@@ -627,6 +630,7 @@ function render(){
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab||(x.dataset.tab==="wb"&&currentTab==="perf")));
   if(currentTab==="home") renderHome();
   else if(currentTab==="profil") renderProfil();
+  else if(currentTab==="meteo") renderMeteo();
   else if(currentTab==="wb") renderWB();
   else if(currentTab==="perf") renderPerf();
   else if(currentTab==="chk") renderChk();
@@ -755,7 +759,7 @@ function renderProfil(){
 
   const p=P(),m=state.meteo,ad=p.aerodrome;
   main.innerHTML=`
-  <div class="eyebrow">Vol &amp; météo</div>
+  <div class="eyebrow">Vol &amp; cartes VAC</div>
   <div class="card"><h2>Avion</h2>
     <div class="kv"><span class="k">Type</span><span class="v">${p.type}</span></div>
     <div class="kv"><span class="k">Immatriculation</span><span class="v">${p.immat}</span></div>
@@ -768,44 +772,101 @@ function renderProfil(){
     </div>
     <div class="kv" style="margin-top:8px"><span class="k">Départ</span><span class="v" id="depInfo">—</span></div>
     <div class="kv"><span class="k">Destination</span><span class="v" id="arrInfo">—</span></div></div>
-  <div class="card"><h2>Météo — METAR / TAF</h2>
+  <div class="card"><h2>Carte VAC</h2>
     <div class="row">
-      <button class="btn accent" id="wxDep">&#8595; METAR/TAF départ</button>
-      <button class="btn accent" id="wxArr">&#8595; METAR/TAF destination</button>
+      <button class="btn accent" id="vacDepBtn">&#8595; VAC départ</button>
+      <button class="btn accent" id="vacArrBtn">&#8595; VAC arrivée</button>
     </div>
-    <div id="wxStatus" class="note" style="margin-top:8px"></div>
-    ${m.rawDep?`<h3>${esc(m.dep||'Départ')}</h3><div class="mono">${esc(m.rawDep)}</div>`:''}
-    ${m.tafDep?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafDep)}</div>`:''}
-    ${m.rawArr?`<h3>${esc(m.arr||'Destination')}</h3><div class="mono">${esc(m.rawArr)}</div>`:''}
-    ${m.tafArr?`<div class="mono" style="margin-top:4px;opacity:.9">${esc(m.tafArr)}</div>`:''}
-    ${(m.nearbyDep&&m.nearbyDep.length)?`<h3>Stations proches — ${esc(m.dep||'départ')}</h3>`+m.nearbyDep.map(o=>`<div class="mono" style="opacity:.85">${esc(o.raw)}</div>`).join(''):''}
-    ${(m.nearbyArr&&m.nearbyArr.length)?`<h3>Stations proches — ${esc(m.arr||'destination')}</h3>`+m.nearbyArr.map(o=>`<div class="mono" style="opacity:.85">${esc(o.raw)}</div>`).join(''):''}
-    <h3>Coller un METAR (hors-ligne)</h3>
-    <textarea id="wxPaste" rows="2" placeholder="LFPA 121200Z 24008KT 9999 FEW040 18/09 Q1018" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--ink);font-family:monospace;font-size:13px"></textarea>
-    <button class="btn ghost" id="wxDecode" style="margin-top:8px">Décoder &#8594; vent / temp / QNH</button>
-    <div class="note" style="margin-top:6px">La récupération auto nécessite une connexion ; le décodage du coller marche hors-ligne.</div></div>
-  <div class="card"><h2>Conditions météo (saisie manuelle)</h2>
-    <div class="grid2">
-      <label class="fld">Direction vent (°)<input id="windDir" inputmode="numeric" value="${esc(m.windDir)}" placeholder="—"></label>
-      <label class="fld">Force vent (kt)<input id="windSpd" inputmode="numeric" value="${esc(m.windSpd)}" placeholder="—"></label>
-      <label class="fld">Température (°C)<input id="temp" inputmode="decimal" value="${esc(m.temp)}" placeholder="—"></label>
-      <label class="fld">QNH (hPa)<input id="qnh" inputmode="numeric" value="${esc(m.qnh)}" placeholder="1013"></label>
-    </div></div>`;
+    <div class="kv" style="margin-top:8px"><span class="k">Phase</span><span class="v">${inFlight()?'EN VOL — carte d\'approche':'AU SOL — plan d\'aérodrome'}</span></div>
+    <div id="vacStatus" class="note" style="margin-top:8px"></div>
+    <div class="note" style="margin-top:6px">La VAC officielle contient le plan d'aérodrome (sol) et la carte d'approche à vue (aérodromes définis dans « Route » ci-dessus). Source : SIA — Licence Ouverte. La météo détaillée est dans l'onglet <b>Météo</b>.</div></div>`;
   bindInput("depIcao",v=>state.meteo.dep=v.toUpperCase());
   bindInput("arrIcao",v=>state.meteo.arr=v.toUpperCase());
   document.getElementById("depIcao").addEventListener('input',updateRouteInfo);
   document.getElementById("arrIcao").addEventListener('input',updateRouteInfo);
   updateRouteInfo();
-  bindInput("windDir",v=>state.meteo.windDir=v);
-  bindInput("windSpd",v=>state.meteo.windSpd=v);
-  bindInput("temp",v=>state.meteo.temp=v);
-  bindInput("qnh",v=>state.meteo.qnh=v);
-  const wd=document.getElementById("wxDep"); if(wd) wd.onclick=()=>doWx('dep');
-  const wa=document.getElementById("wxArr"); if(wa) wa.onclick=()=>doWx('arr');
-  const wdec=document.getElementById("wxDecode"); if(wdec) wdec.onclick=()=>{ const v=(document.getElementById("wxPaste").value||'').trim(); if(v){ applyMetar(parseMetar(v)); state.meteo.rawDep=v.split("\n")[0]; saveState(); renderProfil(); } };
+  const vd=document.getElementById("vacDepBtn"); if(vd) vd.onclick=()=>{ const ic=(state.meteo.dep||'').toUpperCase().trim(); if(ic.length>=4) vacShow(ic); else vacStatusMsg('Saisir le code OACI de départ'); };
+  const va=document.getElementById("vacArrBtn"); if(va) va.onclick=()=>{ const ic=(state.meteo.arr||'').toUpperCase().trim(); if(ic.length>=4) vacShow(ic); else vacStatusMsg('Saisir le code OACI d\'arrivée'); };
+  vacStatusInit((state.meteo.dep||'').toUpperCase().trim());
 }
+function vacStatusMsg(m){ const st=document.getElementById('vacStatus'); if(st) st.innerHTML='<span class="pill warn">'+esc(m)+'</span>'; }
 
 function updateRouteInfo(){ const f=(icao,id)=>{ const a=lookupAirport(icao); const el=document.getElementById(id); if(el) el.textContent=a?(a.n+' · '+(a.e!=null?a.e+' ft':'?')+' · '+a.r.length+' QFU'):'—'; }; f(state.meteo.dep,'depInfo'); f(state.meteo.arr,'arrInfo'); }
+
+/* ===== MÉTÉO : METAR/TAF départ, arrivée + couloir 100 NM (alimente les performances) ===== */
+const R_NM=3440.065, _tr=d=>d*Math.PI/180;
+function gcDistNM(a,b){ const dla=_tr(b.la-a.la),dlo=_tr(b.lo-a.lo); const s=Math.sin(dla/2)**2+Math.cos(_tr(a.la))*Math.cos(_tr(b.la))*Math.sin(dlo/2)**2; return 2*R_NM*Math.asin(Math.min(1,Math.sqrt(s))); }
+function gcBearR(a,b){ const y=Math.sin(_tr(b.lo-a.lo))*Math.cos(_tr(b.la)); const x=Math.cos(_tr(a.la))*Math.sin(_tr(b.la))-Math.sin(_tr(a.la))*Math.cos(_tr(b.la))*Math.cos(_tr(b.lo-a.lo)); return Math.atan2(y,x); }
+function crossTrackNM(a,b,p){ const d13=gcDistNM(a,p)/R_NM,b13=gcBearR(a,p),b12=gcBearR(a,b); const xt=Math.asin(Math.sin(d13)*Math.sin(b13-b12)); const at=Math.acos(Math.cos(d13)/Math.cos(xt))*R_NM; return {xt:Math.abs(xt)*R_NM,at}; }
+async function metarFull(ids){ const t=await wxText("https://aviationweather.gov/api/data/metar?ids="+encodeURIComponent(ids)+"&format=json&taf=true"); if(!t)return[]; try{const j=JSON.parse(t);return Array.isArray(j)?j:[];}catch(e){return[];} }
+async function metarBbox(bbox){ const t=await wxText("https://aviationweather.gov/api/data/metar?bbox="+bbox+"&format=json"); if(!t)return[]; try{const j=JSON.parse(t);return Array.isArray(j)?j:[];}catch(e){return[];} }
+function flCat(m){ if(!m) return ["—","#6b7480"]; const c=(m.clouds||[]).filter(x=>/BKN|OVC|VV/.test(x.cover||'')).map(x=>x.base).filter(x=>x!=null); const ceil=c.length?Math.min.apply(null,c):9999; let v=m.visib; v=(typeof v==="string")?(v.indexOf("+")>=0?10:parseFloat(v)):v; if(v==null)v=10;
+  if(ceil<500||v<1) return ["LIFR","#a21caf"]; if(ceil<1000||v<3) return ["IFR","#d23b3b"]; if(ceil<3000||v<5) return ["MVFR","#b7791f"]; return ["VFR","#0e9d63"]; }
+function condFrom(m){ if(!m)return null; return { windDir:(m.wdir==='VRB'||m.wdir==null)?'':m.wdir, windSpd:m.wspd!=null?m.wspd:'', temp:m.temp!=null?Math.round(m.temp):'', qnh:m.altim!=null?Math.round(m.altim):'' }; }
+function wxCardGA(role,m){
+  if(!m) return `<div class="card"><h2>${esc(role)}</h2><div class="note">Aucune donnée — lancer « Actualiser ».</div></div>`;
+  const fc=flCat(m), taf=m.rawTaf?`<div class="mono" style="margin-top:8px;color:var(--accent2)">TAF ${esc(m.rawTaf)}</div>`:'<div class="note" style="margin-top:6px">TAF indisponible</div>';
+  return `<div class="card"><h2>${esc(role)} — ${esc(m.icaoId||'')} <span class="pill" style="background:${fc[1]}22;color:${fc[1]};border:1px solid ${fc[1]}66">${fc[0]}</span></h2>
+    <div class="mono">${esc(m.rawOb||'—')}</div>
+    <div class="row" style="margin-top:8px">
+      <div class="kv" style="flex:1"><span class="k">Vent</span><span class="v">${m.wdir!=null?((m.wdir==='VRB'?'VRB':m.wdir+'°')+' / '+(m.wspd||0)+' kt'+(m.wgst?' G'+m.wgst:'')):'—'}</span></div>
+      <div class="kv" style="flex:1"><span class="k">Visi</span><span class="v">${m.visib!=null?esc(m.visib):'—'}</span></div>
+    </div>
+    <div class="row">
+      <div class="kv" style="flex:1"><span class="k">T° / Td</span><span class="v">${m.temp!=null?Math.round(m.temp)+'°/'+(m.dewp!=null?Math.round(m.dewp)+'°':'—'):'—'}</span></div>
+      <div class="kv" style="flex:1"><span class="k">QNH</span><span class="v">${m.altim!=null?Math.round(m.altim)+' hPa':'—'}</span></div>
+    </div>${taf}</div>`;
+}
+function renderMeteo(){
+  const m=state.meteo;
+  main.innerHTML=`
+  <div class="eyebrow">Météo du vol</div>
+  <div class="card"><h2>Route</h2>
+    <div class="row">
+      <label class="fld">Départ (OACI)<input id="mtDep" value="${esc(m.dep)}" placeholder="LFPA" maxlength="4" autocapitalize="characters" autocomplete="off"></label>
+      <label class="fld">Destination (OACI)<input id="mtArr" value="${esc(m.arr)}" placeholder="LFPN" maxlength="4" autocapitalize="characters" autocomplete="off"></label>
+    </div>
+    <div class="note" style="margin:8px 0">METAR/TAF du départ et de l'arrivée, + terrains <b>dans un couloir de 100 NM</b> (±50 NM) le long de la route. Les conditions alimentent l'onglet <b>Prévol</b> (perfos). Source : Aviation Weather Center (NOAA).</div>
+    <button class="btn primary" id="mtLoad">&#8635; Actualiser la météo</button>
+    <div id="mtStatus" class="note" style="margin-top:8px"></div>
+  </div>
+  <div id="mtWx">${m.depM||m.arrM?renderMeteoWx():'<div class="note" style="text-align:center;padding:18px">Appuyer sur « Actualiser la météo ».</div>'}</div>`;
+  bindInput("mtDep",v=>{state.meteo.dep=v.toUpperCase();});
+  bindInput("mtArr",v=>{state.meteo.arr=v.toUpperCase();});
+  document.getElementById("mtLoad").onclick=loadMeteo;
+}
+function renderMeteoWx(){
+  const m=state.meteo; let h=wxCardGA("Départ",m.depM)+wxCardGA("Arrivée",m.arrM);
+  const cor=m.corridor||[];
+  if(cor.length){ h+=`<div class="card"><h2>En route — couloir 100 NM (${cor.length})</h2>`;
+    cor.forEach(x=>{ const fc=flCat(x); h+=`<div class="kv"><span class="k">${esc(x.icaoId)} <span class="muted">${fmt(x._at)} NM · ${fmt(x._xt)} NM axe</span></span><span class="v"><span class="pill" style="background:${fc[1]}22;color:${fc[1]};border:1px solid ${fc[1]}66">${fc[0]}</span></span></div><div class="mono" style="margin:2px 0 8px">${esc(x.rawOb||'')}</div>`; });
+    h+=`</div>`; }
+  else if(m.depM&&m.arrM) h+=`<div class="card"><div class="note">Aucun terrain rapporteur dans le couloir.</div></div>`;
+  return h;
+}
+async function loadMeteo(){
+  const st=document.getElementById("mtStatus"); const dep=(state.meteo.dep||'').toUpperCase().trim(), arr=(state.meteo.arr||'').toUpperCase().trim();
+  if(st) st.innerHTML='<span class="pill warn">Chargement météo…</span>';
+  const ids=[dep,arr].filter(x=>x.length===4);
+  try{
+    const list=await metarFull(ids.join(",")); const byId={}; list.forEach(x=>byId[x.icaoId]=x);
+    state.meteo.depM=byId[dep]||null; state.meteo.arrM=byId[arr]||null;
+    const A=lookupAirport(dep),B=lookupAirport(arr); let cor=[];
+    if(A&&B&&A.la!=null&&B.la!=null){ const pad=1.2,bbox=[Math.min(A.la,B.la)-pad,Math.min(A.lo,B.lo)-pad,Math.max(A.la,B.la)+pad,Math.max(A.lo,B.lo)+pad].join(",");
+      const box=await metarBbox(bbox); const route=gcDistNM({la:A.la,lo:A.lo},{la:B.la,lo:B.lo}); const seen={}; seen[dep]=seen[arr]=1;
+      box.forEach(x=>{ if(x.lat==null||seen[x.icaoId])return; const ct=crossTrackNM({la:A.la,lo:A.lo},{la:B.la,lo:B.lo},{la:x.lat,lo:x.lon}); if(ct.xt<=50&&ct.at>=-5&&ct.at<=route+5){ x._at=ct.at;x._xt=ct.xt;cor.push(x);seen[x.icaoId]=1; } });
+      cor.sort((a,b)=>a._at-b._at); cor=cor.slice(0,14); }
+    state.meteo.corridor=cor;
+    /* alimente les performances : météo départ → décollage, arrivée → atterrissage */
+    state.meteo.depCond=condFrom(state.meteo.depM); state.meteo.arrCond=condFrom(state.meteo.arrM);
+    if(state.meteo.depM){ applyMetar(parseMetar(state.meteo.depM.rawOb||'')); state.meteo.rawDep=state.meteo.depM.rawOb; state.meteo.tafDep=state.meteo.depM.rawTaf||''; }
+    if(state.meteo.arrM){ state.meteo.rawArr=state.meteo.arrM.rawOb; state.meteo.tafArr=state.meteo.arrM.rawTaf||''; }
+    if(dep) state.perf.to.icao=dep; if(arr) state.perf.ldg.icao=arr;
+    saveState();
+    if(st) st.innerHTML='<span class="pill ok">Mis à jour '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' · perfos alimentées</span>';
+    const wx=document.getElementById("mtWx"); if(wx) wx.innerHTML=renderMeteoWx();
+  }catch(e){ if(st) st.innerHTML='<span class="pill bad">Échec — réseau/proxy indisponible (coller un METAR dans l\'onglet Vol)</span>'; }
+}
 /* ---- MASSE & CENTRAGE ---- */
 let kpTarget=null;
 function renderWB(){
@@ -842,41 +903,12 @@ function renderWB(){
         : (valid?`<span class="pill ok" style="font-size:15px;padding:8px 16px">DANS L'ENVELOPPE</span>`
                 :`<span class="pill bad flash" style="font-size:16px;padding:10px 18px">HORS ENVELOPPE / VOL INTERDIT</span>`)}</div></div>
   <div class="card"><h2>Enveloppe de centrage</h2>${envelopeSVG(r)}
-    <div class="note" style="margin-top:8px"><span style="color:var(--accent2)">ZFW</span> &nbsp; <span style="color:var(--accent)">Décollage</span></div></div>
-  <div class="card"><h2>Chronomètre de vol</h2>
-    <div style="text-align:center;margin-bottom:8px"><span class="phase-badge ${inFlight()?'vol':'sol'}" id="phaseBadge">${inFlight()?'EN VOL':'AU SOL'}</span></div>
-    <div class="phase-grid">
-      <button class="phbtn ${state.chrono.offBlock?'set':''} ${!state.chrono.offBlock?'next':''}" id="phOff">Off-block<small>${hhmmUTC(state.chrono.offBlock)}</small></button>
-      <button class="phbtn ${state.chrono.takeOff?'set':''} ${(state.chrono.offBlock&&!state.chrono.takeOff)?'next':''} ${!state.chrono.offBlock?'dis':''}" id="phTO">Décollage<small>${hhmmUTC(state.chrono.takeOff)}</small></button>
-      <button class="phbtn ${state.chrono.landing?'set':''} ${(state.chrono.takeOff&&!state.chrono.landing)?'next':''} ${!state.chrono.takeOff?'dis':''}" id="phLD">Atterrissage<small>${hhmmUTC(state.chrono.landing)}</small></button>
-      <button class="phbtn ${state.chrono.onBlock?'set':''} ${(state.chrono.landing&&!state.chrono.onBlock)?'next':''} ${!state.chrono.landing?'dis':''}" id="phOn">On-block<small>${hhmmUTC(state.chrono.onBlock)}</small></button>
-    </div>
-    <div class="kv" style="margin-top:10px"><span class="k">Temps bloc (off→on)</span><span class="v" id="wbBlock">${fmtHMS(chBlockMs())}</span></div>
-    <div class="kv"><span class="k">Temps de vol (déco→atterro)</span><span class="v" id="wbAir">${fmtHMS(chAirMs())}</span></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn ghost" id="chReset">Réinitialiser</button>
-      <button class="btn ghost" id="notifBtn">🔔 Notifications</button>
-    </div>
-    <div class="note" style="margin-top:8px">Le temps bloc alimente l'horamètre (compteur sortie) et sert de base à la gestion carburant.</div></div>
-  <div class="card"><h2>Gestion carburant en vol</h2>
-    <div class="note" style="margin-bottom:8px">Décollage sur le plus plein, conso ${P().fuelMgmtRate} L/h. Alerte quand un réservoir tombe à la moitié de l'autre.</div>
-    <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
-    <div class="kv"><span class="k">Gauche restant</span><span class="v" id="fmLeft">—</span></div>
-    <div class="kv"><span class="k">Droit restant</span><span class="v" id="fmRight">—</span></div>
-    <button class="btn ${state.fuelMgmt.active?'danger':'primary'}" id="fmBtn" style="margin-top:10px">${state.fuelMgmt.active?'Arrêter la gestion':'Démarrer la gestion'}</button></div>`;
+    <div class="note" style="margin-top:8px"><span style="color:var(--accent2)">ZFW</span> &nbsp; <span style="color:var(--accent)">Décollage</span></div></div>`;
   document.querySelectorAll("[data-seat]").forEach(b=>b.onclick=()=>openKeypad(b.dataset.seat));
   document.querySelectorAll("svg .seat").forEach(s=>s.onclick=()=>openKeypad(s.dataset.seat));
   document.getElementById("btnPleins").onclick=()=>{ const pw=P().wb.fuel.perWingMaxL; state.wb.fuelLeft=pw; state.wb.fuelRight=pw; saveState(); renderWB(); lockPerfTab(!wbValid()); };
   bindInput("emptyMass",v=>state.wb.emptyMass=v,true);
   bindInput("emptyArm",v=>state.wb.emptyArm=v,true);
-  document.getElementById("fmBtn").onclick=toggleFuelMgmt;
-  document.getElementById("phOff").onclick=()=>chPhaseStamp('offBlock');
-  document.getElementById("phTO").onclick=()=>chPhaseStamp('takeOff');
-  document.getElementById("phLD").onclick=()=>chPhaseStamp('landing');
-  document.getElementById("phOn").onclick=()=>chPhaseStamp('onBlock');
-  document.getElementById("chReset").onclick=chronoReset;
-  const nb=document.getElementById("notifBtn"); if(nb){ nb.onclick=reqNotif; if(("Notification" in window)&&Notification.permission==="granted") nb.textContent="🔔 Notifications activées"; }
-  updateFuelMgmtDisplay();
 }
 function seatBtn(id,label,val,unit){
   const set=val>0;
@@ -1375,8 +1407,15 @@ function renderNav(){
     <div class="kv"><span class="k">Vitesse sol / route</span><span class="v" id="navGs">—</span></div>
     <button class="btn accent" id="navGpsBtn" style="margin-top:8px">${gpsActive?'Désactiver le suivi GPS':'Activer le suivi GPS'}</button>
     <div class="note" style="margin-top:8px">Quand un point (avec coordonnées) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
+  <div class="card"><h2>Gestion carburant en vol</h2>
+    <div class="note" style="margin-bottom:8px">Décollage sur le plus plein, conso ${P().fuelMgmtRate} L/h. Alerte quand un réservoir tombe à la moitié de l'autre.</div>
+    <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
+    <div class="kv"><span class="k">Gauche restant</span><span class="v" id="fmLeft">—</span></div>
+    <div class="kv"><span class="k">Droit restant</span><span class="v" id="fmRight">—</span></div>
+    <button class="btn ${state.fuelMgmt.active?'danger':'primary'}" id="fmBtn" style="margin-top:10px">${state.fuelMgmt.active?'Arrêter la gestion':'Démarrer la gestion'}</button></div>
   ${vacCard(state.meteo.dep)}`;
   document.getElementById("navGpsBtn").onclick=toggleGPS;
+  const fmb=document.getElementById("fmBtn"); if(fmb){ fmb.onclick=toggleFuelMgmt; updateFuelMgmtDisplay(); }
   document.getElementById("addLeg").onclick=()=>{ state.navlog.push({wpt:"",cap:"",alt:"",dist:"",time:"",obs:"",lat:"",lon:""}); navTriggered={}; saveState(); renderNav(); };
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
     const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); };
