@@ -656,12 +656,12 @@ function renderHome(){
   main.innerHTML=`
   <div class="dash-top">
     <div class="dash-phase">
-      <div class="dash-time">${fmtHMS(bigMs)}<small>${bigLabel}</small></div>
-      <span class="phase-badge ${fl?'vol':'sol'}">${fl?'EN VOL':'AU SOL'}</span>
+      <div class="dash-time"><span id="homeBig">${fmtHMS(bigMs)}</span><small id="homeBigLbl">${bigLabel}</small></div>
+      <span class="phase-badge ${fl?'vol':'sol'}" id="homeBadge">${fl?'EN VOL':'AU SOL'}</span>
     </div>
     <div class="dash-sub">
-      <div>Bloc<b>${fmtHMS(chBlockMs())}</b></div>
-      <div>Vol<b>${fmtHMS(chAirMs())}</b></div>
+      <div>Bloc<b id="homeBlocT">${fmtHMS(chBlockMs())}</b></div>
+      <div>Vol<b id="homeAirT">${fmtHMS(chAirMs())}</b></div>
       <div>Avion<b>${esc(p.immat)}</b></div>
       <div>Vitesse sol<b id="homeGS">${gpsLast&&gpsLast.gs!=null?gpsLast.gs.toFixed(0)+' kt':'—'}</b></div>
       <div>Position GPS<b id="homePos">${gpsLast?gpsLast.lat.toFixed(3)+', '+gpsLast.lon.toFixed(3):(gpsActive?'GPS…':'GPS off')}</b></div>
@@ -1361,6 +1361,15 @@ function updateHomeGps(){
   if(gpsLast){ if(gs) gs.textContent=(gpsLast.gs!=null?gpsLast.gs.toFixed(0)+' kt':'n/d'); if(pos) pos.textContent=gpsLast.lat.toFixed(3)+', '+gpsLast.lon.toFixed(3); }
   else { if(gs) gs.textContent='—'; if(pos) pos.textContent=gpsActive?'GPS…':'GPS off'; }
 }
+function updateHomeChrono(){
+  if(currentTab!=='home') return;
+  const fl=inFlight(), running=chronoRunning();
+  const big=document.getElementById('homeBig'); if(big) big.textContent=fmtHMS(fl?chAirMs():chBlockMs());
+  const lbl=document.getElementById('homeBigLbl'); if(lbl) lbl.textContent=fl?'Temps de vol':(running?'Temps bloc':'Au sol');
+  const bl=document.getElementById('homeBlocT'); if(bl) bl.textContent=fmtHMS(chBlockMs());
+  const ar=document.getElementById('homeAirT'); if(ar) ar.textContent=fmtHMS(chAirMs());
+  const bd=document.getElementById('homeBadge'); if(bd){ bd.textContent=fl?'EN VOL':'AU SOL'; bd.className='phase-badge '+(fl?'vol':'sol'); }
+}
 function distM(a,b,c,d){ const R=6371000,t=x=>x*Math.PI/180,dLat=t(c-a),dLon=t(d-b);
   const x=Math.sin(dLat/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
 function evalTriggers(){
@@ -1680,7 +1689,7 @@ render();
 updateChronoChip();
 updateFuelPopup();
 if(!state.settings || state.settings.gpsAuto!==false){ try{ startGPS(); }catch(e){} }
-function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home') updateHomeGps(); }
+function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home'){ updateHomeGps(); updateHomeChrono(); } }
 setInterval(appTick,1000);
 window.addEventListener("orientationchange",()=>setTimeout(render,250));
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ updateChronoChip(); fuelTick(); updateFuelPopup(); if((!state.settings||state.settings.gpsAuto!==false)&&!gpsActive){ try{ startGPS(); }catch(e){} } reqWake(); } });
