@@ -296,6 +296,7 @@
 <div id="pdfview" class="hide">
   <div class="pdfbar">
     <button class="btn ghost" id="pdfBack">&#8592; Retour</button>
+    <button class="btn primary" id="pdfArchive">Archiver</button>
     <button class="btn accent" id="pdfPrint">Imprimer / PDF</button>
   </div>
   <div class="pdfdoc" id="pdfdoc"></div>
@@ -519,12 +520,12 @@ function defaultState(){
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
     chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
     compteur:{ entree:"", sortie:"" },
-    navlog:[], track:[],
+    navlog:[], track:[], archives:[],
     settings:{ gpsAuto:true, fuelAuto:true },
     chk:{}, sig:null, pic:"" };
 }
 let state=loadState();
-function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!Array.isArray(st.archives)) st.archives=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
 function saveState(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(state)); }catch(e){} }
 function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
@@ -638,6 +639,7 @@ function render(){
   else if(currentTab==="nav") renderNav();
   else if(currentTab==="card") renderCard();
   else if(currentTab==="settings") renderSettings();
+  else if(currentTab==="archive") renderArchive();
   main.scrollTop=0;
 }
 const ARROW_SVG='<svg viewBox="0 0 100 100" width="46" height="46"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#7db1d8"/><circle cx="50" cy="88" r="6" fill="#7db1d8"/></svg>';
@@ -673,7 +675,9 @@ function renderHome(){
       <button class="phbtn ${state.chrono.takeOff?'set':''} ${(state.chrono.offBlock&&!state.chrono.takeOff)?'next':''} ${!state.chrono.offBlock?'dis':''}" id="phTO">Décollage<small>${hhmmUTC(state.chrono.takeOff)}</small></button>
       <button class="phbtn ${state.chrono.landing?'set':''} ${(state.chrono.takeOff&&!state.chrono.landing)?'next':''} ${!state.chrono.takeOff?'dis':''}" id="phLD">Atterrissage<small>${hhmmUTC(state.chrono.landing)}</small></button>
       <button class="phbtn ${state.chrono.onBlock?'set':''} ${(state.chrono.landing&&!state.chrono.onBlock)?'next':''} ${!state.chrono.landing?'dis':''}" id="phOn">On-block<small>${hhmmUTC(state.chrono.onBlock)}</small></button>
-    </div></div>
+    </div>
+    <button class="btn ghost" id="phUndo" style="margin-top:10px"${(state.chrono.offBlock||state.chrono.takeOff||state.chrono.landing||state.chrono.onBlock)?'':' disabled'}>&#8630; Annuler le dernier top</button>
+    <div class="note" style="margin-top:6px">Annule uniquement le dernier top (en cas de clic involontaire) sans effacer le reste du vol.</div></div>
   ${nextHTML}
   <div class="eyebrow">État de l'appareil</div>
   <div class="home-status">
@@ -695,6 +699,7 @@ function renderHome(){
   main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ const t=el.dataset.go; if(t==='perf'&&!wbValid()){ currentTab='wb'; } else { currentTab=t; } render(); });
   const phm={phOff:'offBlock',phTO:'takeOff',phLD:'landing',phOn:'onBlock'};
   Object.keys(phm).forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=()=>chPhaseStamp(phm[id]); });
+  const pu=document.getElementById("phUndo"); if(pu) pu.onclick=chPhaseUndo;
   updateHomeGps();
 }
 function renderSettings(){
@@ -721,12 +726,16 @@ function renderSettings(){
     <div class="kv"><span class="k">Immatriculation</span><span class="v">${esc(p.immat)}</span></div>
     <div class="kv"><span class="k">Aérodrome de base</span><span class="v">${esc(p.aerodrome.icao)} — ${esc(p.aerodrome.name)}</span></div>
     <div class="kv"><span class="k">MTOW</span><span class="v">${r.maxWeight} kg</span></div></div>
+  <div class="card"><h2>Archive</h2>
+    <button class="btn accent" id="setArchive">Ouvrir les archives (${(state.archives||[]).length})</button>
+    <div class="note" style="margin-top:8px">Datacards de vol générées et archivées depuis le Carnet. Rouvrez une fiche passée ou videz les archives.</div></div>
   <div class="card"><h2>Données du vol</h2>
     <button class="btn ghost" id="setReset">Réinitialiser le vol en cours</button>
-    <div class="note" style="margin-top:8px">Remet à zéro le chrono, le carburant en vol, les checklists et le plan de vol. L'avion et ses données de masse restent.</div></div>
+    <div class="note" style="margin-top:8px">Remet à zéro le chrono, le carburant en vol, les checklists et le plan de vol. L'avion, ses données de masse et les archives restent.</div></div>
   <div class="card"><h2>À propos</h2>
     <div class="note">ALTEON FLY — aide à la décision <b>non certifiée</b>. Le commandant de bord reste seul responsable. Base aérodromes : OurAirports (domaine public). Cartes VAC : SIA (Licence Ouverte Etalab).</div></div>`;
   document.getElementById("setNotif").onclick=reqNotif;
+  document.getElementById("setArchive").onclick=()=>{ currentTab='archive'; render(); };
   document.getElementById("setGps").onclick=()=>setGPS(!gpsAutoOn);
   document.getElementById("setFuel").onclick=()=>{ if(!state.settings) state.settings={}; state.settings.fuelAuto=!fuelAutoOn; if(state.settings.fuelAuto && state.chrono.offBlock && !state.chrono.onBlock && !(state.fuelMgmt&&state.fuelMgmt.active)) startFuelMgmt(); saveState(); renderSettings(); };
   document.getElementById("setReset").onclick=()=>{ if(confirm("Réinitialiser le vol en cours ?")){ chronoReset(); state.chk={}; state.navlog=[]; state.track=[]; if(state.fuelMgmt){ state.fuelMgmt.active=false; state.fuelMgmt.lowPrompted=false; } saveState(); currentTab="home"; render(); } };
@@ -1101,12 +1110,31 @@ function inFlight(){ const c=state.chrono; return !!(c.takeOff&&!c.landing); }
 function chronoRunning(){ const c=state.chrono; return !!(c.offBlock&&!c.onBlock); }
 function chronoElapsedMs(){ return chBlockMs(); }
 function hhmmUTC(ts){ if(!ts) return '—'; return new Date(ts).toISOString().slice(11,16)+'Z'; }
-function applyBlockToCompteur(){ const e=parseFloat(state.compteur.entree); if(isFinite(e)){ const h=chBlockMs()/3600000; state.compteur.sortie=(e+h).toFixed(2); if(typeof updCpt==='function') updCpt(); } }
+/* Compteur horaire en heures.minutes : la partie décimale = minutes (00–59). 1234.30 = 1234 h 30 min. */
+function meterToMin(v){ if(v==null) return null; v=(''+v).replace(',','.').trim(); if(!v) return null; const n=parseFloat(v); if(!isFinite(n)) return null; const h=Math.floor(n+1e-9), m=Math.round((n-h)*100); return h*60+m; }
+function minToMeter(tot){ tot=Math.max(0,Math.round(tot)); const h=Math.floor(tot/60), m=tot%60; return h+'.'+String(m).padStart(2,'0'); }
+function meterDeltaTxt(eMin,sMin){ const d=sMin-eMin; if(!(d>=0)) return '—'; const h=Math.floor(d/60), m=d%60; return h>0?(h+' h '+String(m).padStart(2,'0')):(m+' min'); }
+function applyBlockToCompteur(){ const eMin=meterToMin(state.compteur.entree); if(eMin!=null){ const blkMin=Math.round(chBlockMs()/60000); state.compteur.sortie=minToMeter(eMin+blkMin); if(typeof updCpt==='function') updCpt(); } }
 function chPhaseStamp(field){ const c=state.chrono;
-  if(field==='offBlock'){ if(c.offBlock) return; c.offBlock=Date.now(); state.track=[]; reqNotif(); reqWake(); if(!state.settings||state.settings.fuelAuto!==false) startFuelMgmt(); }
+  if(field==='offBlock'){ if(c.offBlock) return; c.offBlock=Date.now(); state.track=[]; reqNotif(); reqWake();
+    if(state.compteur.entree && !state.compteur.sortie){ const em=meterToMin(state.compteur.entree); if(em!=null) state.compteur.sortie=minToMeter(em); } /* la sortie part du même relevé que l'entrée */
+    if(!state.settings||state.settings.fuelAuto!==false) startFuelMgmt(); }
   else if(field==='takeOff'){ if(!c.offBlock||c.takeOff) return; c.takeOff=Date.now(); }
   else if(field==='landing'){ if(!c.takeOff||c.landing) return; c.landing=Date.now(); }
   else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); stopFuelMgmt(); relWake(); }
+  saveState(); render(); updateChronoChip(); updateFuelPopup();
+}
+function chPhaseUndo(){
+  const c=state.chrono, order=['onBlock','landing','takeOff','offBlock'], labels={offBlock:'Off-block',takeOff:'Décollage',landing:'Atterrissage',onBlock:'On-block'};
+  const f=order.find(k=>c[k]); if(!f) return;
+  if(!confirm('Annuler le top « '+labels[f]+' » ?')) return;
+  c[f]=null;
+  if(f==='onBlock'){ /* le vol reprend : relance la gestion carburant si auto (sans réinitialiser les niveaux) */
+    if((!state.settings||state.settings.fuelAuto!==false) && c.offBlock && state.fuelMgmt){ state.fuelMgmt.active=true; state.fuelMgmt.lastChronoMs=chronoElapsedMs(); }
+    reqWake();
+  } else if(f==='offBlock'){ /* annule le départ : stoppe carburant + trace GPS */
+    stopFuelMgmt(); state.track=[]; relWake();
+  }
   saveState(); render(); updateChronoChip(); updateFuelPopup();
 }
 function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; state.fuelMgmt.active=false; state.track=[]; saveState(); render(); updateChronoChip(); updateFuelPopup(); }
@@ -1496,10 +1524,10 @@ function renderNav(){
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
       <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
-      <label class="fld">Compteur sortie<input id="cptSortie" inputmode="decimal" value="${esc(state.compteur.sortie)}" placeholder="1000.50"></label>
+      <label class="fld">Compteur sortie<input id="cptSortie" inputmode="decimal" value="${esc(state.compteur.sortie)}" placeholder="1000.30"></label>
     </div>
     <div class="kv" style="margin-top:8px"><span class="k">Temps de vol (compteur)</span><span class="v" id="cptDelta">—</span></div>
-    <div class="note" style="margin-top:6px">La sortie se remplit automatiquement en fin de vol (top On-block du chronomètre).</div></div>
+    <div class="note" style="margin-top:6px">Compteur en <b>heures.minutes</b> (les décimales = minutes, 00–59 ; ex. 1000.30 = 1000 h 30 min). La sortie part du même relevé que l'entrée et se complète automatiquement en fin de vol (top On-block).</div></div>
   <div class="card"><h2>Suivi GPS</h2>
     <div class="kv"><span class="k">GPS</span><span class="v" id="navGps">${gpsActive?'actif':(state.settings&&state.settings.gpsAuto===false?'désactivé (Réglages)':'en attente')}</span></div>
     <div class="kv"><span class="k">Position</span><span class="v" id="navPos">—</span></div>
@@ -1624,8 +1652,8 @@ function exportPDF(){
   const utc=new Date().toISOString().replace("T"," ").slice(0,16)+" UTC";
   const chkDone=p.checklists.every(ph=>phaseComplete(ph.id));
   const rows=r.items.map(it=>`<tr><td>${esc(it.label)}</td><td style="text-align:right">${fmt(it.mass)}</td><td style="text-align:right">${it.arm.toFixed(3)}</td><td style="text-align:right">${fmt(it.mass*it.arm)}</td></tr>`).join("");
-  const ce=parseFloat(state.compteur.entree), cs=parseFloat(state.compteur.sortie);
-  const cdelta=(isFinite(ce)&&isFinite(cs)&&cs>=ce)?(cs-ce).toFixed(2)+' h':'\u2014';
+  const ceMin=meterToMin(state.compteur.entree), csMin=meterToMin(state.compteur.sortie);
+  const cdelta=(ceMin!=null&&csMin!=null&&csMin>=ceMin)?meterDeltaTxt(ceMin,csMin):'\u2014';
   const navRows=(state.navlog||[]).map((L,i)=>`<tr><td>${i+1}</td><td>${esc(L.wpt||'')}</td><td>${esc(L.cap||'')}</td><td>${esc(L.alt||'')}</td><td>${esc(L.dist||'')}</td><td>${esc(L.time||'')}</td><td>${esc(L.obs||'')}</td></tr>`).join("");
   let h='<div class="head"><div><h1>FICHE DE VOL \u2014 '+esc(p.immat)+'</h1><div>'+esc(p.type)+'</div></div><div style="text-align:right;display:flex;align-items:center;gap:10px"><img src="'+ALTEON_LOGO+'" style="width:46px;height:46px;border-radius:8px"><div><b>ALTEON FLY</b><br>'+utc+'</div></div></div>';
   h+='<h3>Masse &amp; centrage</h3><table><tr><th>Poste</th><th style="text-align:right">Masse (kg)</th><th style="text-align:right">Bras (m)</th><th style="text-align:right">Moment</th></tr>'+rows
@@ -1645,13 +1673,43 @@ function exportPDF(){
   h+='<div class="box">Checklists normales compl\u00e9t\u00e9es : <b class="'+(chkDone?'ok':'bad')+'">'+(chkDone?'OUI':'NON')+'</b></div>';
   h+='<h3>Signature du commandant de bord</h3>'+(state.sig?'<img src="'+state.sig+'" class="sig" style="object-fit:contain">':'<div class="sig"></div>')
     +'<p>Sign\u00e9 \u00e9lectroniquement par le PIC <b>'+esc(state.pic||'(non renseign\u00e9)')+'</b> le <b>'+utc+'</b>.</p>';
+  lastPdfHtml=h; viewingArchive=false;
   document.getElementById('pdfdoc').innerHTML=h;
   document.getElementById('pdfview').classList.remove('hide');
-  setTimeout(fitRouteMap,30);
+  setArchiveBtnLabel(); setTimeout(fitRouteMap,30);
+}
+let lastPdfHtml="", viewingArchive=false;
+function setArchiveBtnLabel(){ const b=document.getElementById('pdfArchive'); if(b) b.textContent=viewingArchive?'Archivée':'Archiver'; }
+function archiveCurrent(){
+  if(!lastPdfHtml||viewingArchive) return;
+  const p=P(), r=computeWB();
+  state.archives=state.archives||[];
+  state.archives.unshift({ ts:Date.now(), immat:p.immat, type:p.type, pic:state.pic||'', dep:(state.meteo.dep||'').toUpperCase(), arr:(state.meteo.arr||'').toUpperCase(), mass:Math.round(r.mass), valid:wbValid(), html:lastPdfHtml });
+  if(state.archives.length>30) state.archives.length=30;
+  saveState();
+  const b=document.getElementById('pdfArchive'); if(b){ b.textContent='Archivée ✓'; setTimeout(()=>{ if(!viewingArchive) b.textContent='Archiver'; },1600); }
+}
+function viewArchive(i){ const a=(state.archives||[])[i]; if(!a) return; viewingArchive=true; document.getElementById('pdfdoc').innerHTML=a.html; document.getElementById('pdfview').classList.remove('hide'); setArchiveBtnLabel(); setTimeout(fitRouteMap,30); }
+function renderArchive(){
+  const arch=state.archives||[];
+  const rows=arch.map((a,i)=>{ const d=new Date(a.ts), dt=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="card" style="padding:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div><b>${esc(a.immat)}</b> · ${esc(a.dep||'—')} → ${esc(a.arr||'—')}<div class="note">${dt} · ${esc(a.pic||'PIC non renseigné')} · ${a.mass} kg · ${a.valid?'centrage OK':'hors enveloppe'}</div></div>
+      <button class="btn accent" data-arch="${i}" style="width:auto;padding:10px 14px;flex:0 0 auto">Voir</button></div></div>`; }).join('');
+  main.innerHTML=`
+  <div class="eyebrow">Archives</div>
+  <div class="card"><h2>Datacards archivées</h2>
+    <div class="note">${arch.length?arch.length+' fiche(s) de vol archivée(s). Touchez « Voir » pour rouvrir une fiche.':'Aucune datacard archivée. Depuis le Carnet, générez la fiche de vol puis touchez « Archiver ».'}</div>
+    ${arch.length?'<button class="btn danger" id="archClear" style="margin-top:12px">Vider les archives</button>':''}</div>
+  ${rows}
+  <button class="btn ghost" id="archBack" style="margin-top:8px">&#8592; Retour aux réglages</button>`;
+  main.querySelectorAll('[data-arch]').forEach(b=>b.onclick=()=>viewArchive(+b.dataset.arch));
+  const cl=document.getElementById('archClear'); if(cl) cl.onclick=()=>{ if(confirm('Vider toutes les archives ?')){ state.archives=[]; saveState(); renderArchive(); } };
+  document.getElementById('archBack').onclick=()=>{ currentTab='settings'; render(); };
 }
 
 /* ---- UTILS ---- */
-function updCpt(){ const e=parseFloat(state.compteur.entree),s=parseFloat(state.compteur.sortie); const el=document.getElementById('cptDelta'); if(el) el.textContent=(isFinite(e)&&isFinite(s)&&s>=e)?((s-e).toFixed(2)+' h'):'—'; }
+function updCpt(){ const e=meterToMin(state.compteur.entree),s=meterToMin(state.compteur.sortie); const el=document.getElementById('cptDelta'); if(el) el.textContent=(e!=null&&s!=null&&s>=e)?meterDeltaTxt(e,s):'—'; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmt(n){ if(n==null||!isFinite(n)) return "0"; return (Math.round(n*10)/10).toLocaleString("fr-FR"); }
 function bindInput(id,fn,live,after){
@@ -1682,7 +1740,8 @@ try{ document.getElementById("logoImg").src=ALTEON_LOGO; }catch(e){}
 window.addEventListener("resize",()=>{ if(typeof fitRouteMap==="function") fitRouteMap(); });
 document.getElementById("settingsBtn").onclick=()=>{ currentTab="settings"; render(); };
 document.getElementById("carnetBtn").onclick=()=>{ currentTab="card"; render(); };
-document.getElementById("pdfBack").onclick=()=>document.getElementById("pdfview").classList.add("hide");
+document.getElementById("pdfBack").onclick=()=>{ document.getElementById("pdfview").classList.add("hide"); viewingArchive=false; };
+document.getElementById("pdfArchive").onclick=archiveCurrent;
 document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacview").classList.add("hide"); document.getElementById("vacFrame").src="about:blank"; };
 document.getElementById("pdfPrint").onclick=()=>window.print();
 render();
