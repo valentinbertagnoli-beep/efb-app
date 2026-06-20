@@ -113,7 +113,7 @@
   #gpspop,#fuelpop{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-b) + 86px);z-index:60;
     border-radius:18px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center;}
   #gpspop{background:linear-gradient(180deg,#eaf2fd,#dcebfb);border:1px solid var(--accent2);}
-  #fuelpop{background:linear-gradient(180deg,#fbf3e0,#f5e9c8);border:1px solid var(--warn);}
+  #fuelpop{background:linear-gradient(180deg,#fbf3e0,#f5e9c8);border:1px solid var(--warn);z-index:58;}
   #gpspop .t,#fuelpop .t{flex:1;}
   #gpspop .t b,#fuelpop .t b{display:block;font-size:13px;letter-spacing:.5px;}
   #gpspop .t b{color:var(--accent);} #fuelpop .t b{color:var(--warn);}
@@ -274,7 +274,6 @@
   <div style="font-size:26px">&#9981;</div>
   <div class="t"><b>GESTION CARBURANT</b><span id="fuelpopTxt">—</span></div>
   <button class="btn primary" style="width:auto;padding:12px 14px;min-height:48px" id="fuelpopOk">Réservoir changé</button>
-  <button class="btn ghost" style="width:auto;padding:12px 12px;min-height:48px" id="fuelpopHide">Masquer</button>
 </div>
 <div id="navpop" class="hide">
   <div style="font-size:26px">&#129517;</div>
@@ -520,11 +519,12 @@ function defaultState(){
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
     chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
     compteur:{ entree:"", sortie:"" },
-    navlog:[],
+    navlog:[], track:[],
+    settings:{ gpsAuto:true, fuelAuto:true },
     chk:{}, sig:null, pic:"" };
 }
 let state=loadState();
-function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; return st; }}catch(e){} return defaultState(); }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
 function saveState(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(state)); }catch(e){} }
 function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
@@ -663,6 +663,8 @@ function renderHome(){
       <div>Bloc<b>${fmtHMS(chBlockMs())}</b></div>
       <div>Vol<b>${fmtHMS(chAirMs())}</b></div>
       <div>Avion<b>${esc(p.immat)}</b></div>
+      <div>Vitesse sol<b id="homeGS">${gpsLast&&gpsLast.gs!=null?gpsLast.gs.toFixed(0)+' kt':'—'}</b></div>
+      <div>Position GPS<b id="homePos">${gpsLast?gpsLast.lat.toFixed(3)+', '+gpsLast.lon.toFixed(3):(gpsActive?'GPS…':'GPS off')}</b></div>
     </div>
   </div>
   <div class="card"><h2>Chronomètre</h2>
@@ -676,7 +678,7 @@ function renderHome(){
   <div class="eyebrow">État de l'appareil</div>
   <div class="home-status">
     <div class="hs-card ${valid?'ok':'bad'}" data-go="wb"><span class="hs-k">Masse &amp; centrage</span><span class="hs-v">${valid?"Dans l'enveloppe":'Hors enveloppe'}</span><span class="hs-x">${fmt(r.mass)} kg décollage</span></div>
-    <div class="hs-card" data-go="wb"><span class="hs-k">Carburant</span><span class="hs-v">${fmt(r.fuelL)} L</span><span class="hs-x">${state.fuelMgmt&&state.fuelMgmt.active?'gestion active':'à bord'}</span></div>
+    <div class="hs-card" data-go="nav"><span class="hs-k">Carburant</span><span class="hs-v">${fmt(r.fuelL)} L</span><span class="hs-x">${state.fuelMgmt&&state.fuelMgmt.active?'gestion active':'à bord'}</span></div>
     <div class="hs-card" data-go="profil"><span class="hs-k">Météo ${esc(dep)}</span><span class="hs-v">${esc(state.meteo.windDir||'—')}° / ${esc(state.meteo.windSpd||'—')} kt</span><span class="hs-x">QNH ${esc(state.meteo.qnh||'—')}</span></div>
     <div class="hs-card" data-go="nav"><span class="hs-k">Plan de vol</span><span class="hs-v">${dep} → ${arr}</span><span class="hs-x">${nLegs} pts · ${totDist?totDist.toFixed(0)+' NM':'—'}</span></div>
   </div>
@@ -693,16 +695,27 @@ function renderHome(){
   main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ const t=el.dataset.go; if(t==='perf'&&!wbValid()){ currentTab='wb'; } else { currentTab=t; } render(); });
   const phm={phOff:'offBlock',phTO:'takeOff',phLD:'landing',phOn:'onBlock'};
   Object.keys(phm).forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=()=>chPhaseStamp(phm[id]); });
+  updateHomeGps();
 }
 function renderSettings(){
   const r=computeWB(), p=P();
   const granted=("Notification" in window)&&Notification.permission==="granted";
+  const gpsAutoOn=!state.settings||state.settings.gpsAuto!==false;
+  const fuelAutoOn=!state.settings||state.settings.fuelAuto!==false;
   main.innerHTML=`
   <div class="eyebrow">Réglages</div>
   <div class="card"><h2>Notifications &amp; écran</h2>
     <div class="note">Alertes système (réservoir, checklist automatique, point tournant, carburant bas) et maintien de l'écran allumé pendant le vol.</div>
     <button class="btn ${granted?'primary':'accent'}" id="setNotif" style="margin-top:10px">${granted?'&#10003; Notifications activées':'&#128276; Activer les notifications'}</button>
     <div class="note" style="margin-top:8px">iOS : écran verrouillé / arrière-plan, les alertes ne peuvent pas se déclencher sans serveur. L'écran reste allumé tant qu'un chrono ou le GPS est actif.</div></div>
+  <div class="card"><h2>Suivi GPS &amp; carburant</h2>
+    <div class="kv"><span class="k">Suivi GPS</span><span class="v">${gpsActive?'actif':'inactif'}</span></div>
+    <button class="btn ${gpsAutoOn?'primary':'ghost'}" id="setGps" style="margin-top:8px">${gpsAutoOn?'&#10003; Suivi GPS activé (par défaut)':'Activer le suivi GPS'}</button>
+    <div class="note" style="margin-top:8px">Le suivi GPS s'active automatiquement au lancement et enregistre la trace réelle du vol (off-block → on-block), tracée sur la carte du carnet. Désactivez-le ici si besoin.</div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+    <div class="kv"><span class="k">Gestion carburant auto</span><span class="v">${state.fuelMgmt&&state.fuelMgmt.active?'active':'en veille'}</span></div>
+    <button class="btn ${fuelAutoOn?'primary':'ghost'}" id="setFuel" style="margin-top:8px">${fuelAutoOn?'&#10003; Démarrage auto à l\'off-block':'Démarrage manuel'}</button>
+    <div class="note" style="margin-top:8px">Si activé, la gestion carburant démarre seule à l'off-block (roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h). La fenêtre flottante de changement de réservoir reste affichée sur toutes les pages.</div></div>
   <div class="card"><h2>Appareil</h2>
     <div class="kv"><span class="k">Type</span><span class="v">${esc(p.type)}</span></div>
     <div class="kv"><span class="k">Immatriculation</span><span class="v">${esc(p.immat)}</span></div>
@@ -714,7 +727,9 @@ function renderSettings(){
   <div class="card"><h2>À propos</h2>
     <div class="note">ALTEON FLY — aide à la décision <b>non certifiée</b>. Le commandant de bord reste seul responsable. Base aérodromes : OurAirports (domaine public). Cartes VAC : SIA (Licence Ouverte Etalab).</div></div>`;
   document.getElementById("setNotif").onclick=reqNotif;
-  document.getElementById("setReset").onclick=()=>{ if(confirm("Réinitialiser le vol en cours ?")){ chronoReset(); state.chk={}; state.navlog=[]; if(state.fuelMgmt){ state.fuelMgmt.active=false; state.fuelMgmt.lowPrompted=false; } saveState(); currentTab="home"; render(); } };
+  document.getElementById("setGps").onclick=()=>setGPS(!gpsAutoOn);
+  document.getElementById("setFuel").onclick=()=>{ if(!state.settings) state.settings={}; state.settings.fuelAuto=!fuelAutoOn; if(state.settings.fuelAuto && state.chrono.offBlock && !state.chrono.onBlock && !(state.fuelMgmt&&state.fuelMgmt.active)) startFuelMgmt(); saveState(); renderSettings(); };
+  document.getElementById("setReset").onclick=()=>{ if(confirm("Réinitialiser le vol en cours ?")){ chronoReset(); state.chk={}; state.navlog=[]; state.track=[]; if(state.fuelMgmt){ state.fuelMgmt.active=false; state.fuelMgmt.lowPrompted=false; } saveState(); currentTab="home"; render(); } };
 }
 /* ---- PROFIL & MÉTÉO ---- */
 function _hav(a,b,c,d){ const R=6371,t=x=>x*Math.PI/180; const dla=t(c-a),dlo=t(d-b); const s=Math.sin(dla/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dlo/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
@@ -983,9 +998,10 @@ function _routePts(){
 }
 function routeMap(){
   const pts=_routePts();
-  if(pts.length<2) return '<div class="note">Trajet indisponible : saisissez les aérodromes de départ et d\'arrivée (onglet Vol), et éventuellement des points avec coordonnées.</div>';
+  const track=(state.track||[]).filter(p=>isFinite(p.la)&&isFinite(p.lo));
+  if(pts.length<2 && track.length<2) return '<div class="note">Trajet indisponible : saisissez les aérodromes de départ et d\'arrivée (onglet Vol), et éventuellement des points avec coordonnées.</div>';
   const W=600,H=380,pad=44;
-  const las=pts.map(p=>p.la),los=pts.map(p=>p.lo);
+  const las=pts.map(p=>p.la).concat(track.map(p=>p.la)),los=pts.map(p=>p.lo).concat(track.map(p=>p.lo));
   const minLa=Math.min.apply(null,las),maxLa=Math.max.apply(null,las),minLo=Math.min.apply(null,los),maxLo=Math.max.apply(null,los);
   let z=2; for(z=16; z>=2; z--){ const w=_merX(maxLo,z)-_merX(minLo,z), h=_merY(minLa,z)-_merY(maxLa,z); if(w<=W-2*pad && h<=H-2*pad) break; }
   const cX=(_merX(minLo,z)+_merX(maxLo,z))/2, cY=(_merY(minLa,z)+_merY(maxLa,z))/2;
@@ -998,6 +1014,10 @@ function routeMap(){
   }
   const sp=pts.map(p=>({x:_merX(p.lo,z)-oX,y:_merY(p.la,z)-oY,nm:p.nm,t:p.t}));
   const line=sp.map(q=>q.x.toFixed(1)+','+q.y.toFixed(1)).join(' ');
+  let trackPoly='';
+  if(track.length>1){ const tline=track.map(p=>(_merX(p.lo,z)-oX).toFixed(1)+','+(_merY(p.la,z)-oY).toFixed(1)).join(' ');
+    trackPoly='<polyline points="'+tline+'" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".65" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<polyline points="'+tline+'" fill="none" stroke="#d23b3b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>'; }
   let dots='';
   sp.forEach(q=>{ const col=q.t==='dep'?'#2f80b8':(q.t==='arr'?'#1d4ed8':'#444'), rad=q.t==='wp'?4:7;
     const right=q.x>W-100, lx=right?q.x-10:q.x+10, anc=right?'end':'start';
@@ -1008,10 +1028,11 @@ function routeMap(){
   if(typeof gpsLast!=='undefined' && gpsLast && isFinite(gpsLast.lat)){ const gx=_merX(gpsLast.lon,z)-oX, gy=_merY(gpsLast.lat,z)-oY;
     if(gx>=0&&gx<=W&&gy>=0&&gy<=H) gps='<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="6" fill="#d23b3b" stroke="#fff" stroke-width="2"/><text x="'+(gx+10).toFixed(1)+'" y="'+(gy+4).toFixed(1)+'" font-size="12" font-weight="800" fill="#d23b3b" stroke="#fff" stroke-width="3" paint-order="stroke">avion</text>'; }
   let totNM=0; for(let i=1;i<pts.length;i++) totNM+=_hav(pts[i-1].la,pts[i-1].lo,pts[i].la,pts[i].lo)/1.852;
+  const plannedPoly=(pts.length>1)?('<polyline points="'+line+'" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85" stroke-linejoin="round"/>'
+    +'<polyline points="'+line+'" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round"/>'):'';
+  const legend=(track.length>1)?'<g transform="translate(10,16)"><line x1="0" y1="0" x2="22" y2="0" stroke="#1d4ed8" stroke-width="3"/><text x="28" y="4" font-size="12" font-weight="700" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke">prévu</text><line x1="84" y1="0" x2="106" y2="0" stroke="#d23b3b" stroke-width="3"/><text x="112" y="4" font-size="12" font-weight="700" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke">réel GPS</text></g>':'';
   const svg='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0;width:'+W+'px;height:'+H+'px;pointer-events:none">'
-    +'<polyline points="'+line+'" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity=".85" stroke-linejoin="round"/>'
-    +'<polyline points="'+line+'" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round"/>'
-    +dots+gps
+    +plannedPoly+trackPoly+dots+gps+legend
     +'<text x="10" y="'+(H-12)+'" font-size="12" font-weight="700" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke">~'+totNM.toFixed(0)+' NM</text></svg>';
   return '<div class="rmap-wrap"><div class="rmap" style="position:relative;width:'+W+'px;height:'+H+'px;overflow:hidden;border-radius:12px;border:1px solid #d9d2c4;background:#dfe7ee">'
     +tiles+svg
@@ -1082,39 +1103,51 @@ function chronoElapsedMs(){ return chBlockMs(); }
 function hhmmUTC(ts){ if(!ts) return '—'; return new Date(ts).toISOString().slice(11,16)+'Z'; }
 function applyBlockToCompteur(){ const e=parseFloat(state.compteur.entree); if(isFinite(e)){ const h=chBlockMs()/3600000; state.compteur.sortie=(e+h).toFixed(2); if(typeof updCpt==='function') updCpt(); } }
 function chPhaseStamp(field){ const c=state.chrono;
-  if(field==='offBlock'){ if(c.offBlock) return; c.offBlock=Date.now(); reqNotif(); reqWake(); }
+  if(field==='offBlock'){ if(c.offBlock) return; c.offBlock=Date.now(); state.track=[]; reqNotif(); reqWake(); if(!state.settings||state.settings.fuelAuto!==false) startFuelMgmt(); }
   else if(field==='takeOff'){ if(!c.offBlock||c.takeOff) return; c.takeOff=Date.now(); }
   else if(field==='landing'){ if(!c.takeOff||c.landing) return; c.landing=Date.now(); }
-  else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); relWake(); }
-  saveState(); render(); updateChronoChip();
+  else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); stopFuelMgmt(); relWake(); }
+  saveState(); render(); updateChronoChip(); updateFuelPopup();
 }
-function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; saveState(); render(); updateChronoChip(); }
+function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; state.fuelMgmt.active=false; state.track=[]; saveState(); render(); updateChronoChip(); updateFuelPopup(); }
 function fmtHMS(ms){ ms=Math.max(0,ms|0); let s=Math.floor(ms/1000),h=Math.floor(s/3600); s-=h*3600; let m=Math.floor(s/60); s-=m*60; const p=n=>String(n).padStart(2,'0'); return (h>0?h+':'+p(m):m)+':'+p(s); }
 function updateChronoChip(){ const fl=inFlight(); const ms=fl?chAirMs():chBlockMs(); const el=document.getElementById('chrono'); if(el){ el.textContent=(fl?'\u25B2 ':'\u23F1 ')+fmtHMS(ms); el.classList.toggle('run', chronoRunning()||fl); } const b=document.getElementById('wbBlock'); if(b) b.textContent=fmtHMS(chBlockMs()); const a=document.getElementById('wbAir'); if(a) a.textContent=fmtHMS(chAirMs()); const pb=document.getElementById('phaseBadge'); if(pb){ pb.textContent=fl?'EN VOL':'AU SOL'; pb.className='phase-badge '+(fl?'vol':'sol'); } }
 
 /* ---- GESTION CARBURANT ---- */
+/* Activation auto à l'off-block. Conso par phase : roulage 20 L/h, vol 35 L/h, roulage arrivée 20 L/h. */
 function fullerTank(){ const i=wbInputs(); return i.fuelLeft>=i.fuelRight?"left":"right"; }
+function fuelBurnL(aMs,bMs){ /* intègre la conso (L) entre deux instants exprimés en temps-bloc (ms) */
+  const c=state.chrono; if(!c.offBlock||bMs<=aMs) return 0;
+  const fl=P().fuelMgmtRate||35, taxi=P().fuelTaxiRate||20;
+  const toMs=c.takeOff?(c.takeOff-c.offBlock):Infinity, ldMs=c.landing?(c.landing-c.offBlock):Infinity;
+  const segs=[[0,toMs,taxi],[toMs,ldMs,fl],[ldMs,Infinity,taxi]];
+  let L=0; segs.forEach(s=>{ const lo=Math.max(s[0],aMs),hi=Math.min(s[1],bMs); if(hi>lo) L+=(hi-lo)/3600000*s[2]; });
+  return L;
+}
+function startFuelMgmt(){
+  const m=state.fuelMgmt, i=wbInputs();
+  m.active=true; m.left=i.fuelLeft; m.right=i.fuelRight; m.sel=fullerTank(); m.lastChronoMs=chronoElapsedMs(); m.prompted=false; m.lowPrompted=false;
+  saveState(); updateFuelPopup();
+}
+function stopFuelMgmt(){ const m=state.fuelMgmt; m.active=false; saveState(); if(fuelpop) fuelpop.classList.add('hide'); if(currentTab==="wb"||currentTab==="nav") updateFuelMgmtDisplay(); }
 function toggleFuelMgmt(){
   const m=state.fuelMgmt;
-  if(m.active){ m.active=false; saveState(); renderWB(); return; }
-  const i=wbInputs();
-  m.active=true; m.left=i.fuelLeft; m.right=i.fuelRight; m.sel=fullerTank(); m.lastChronoMs=chronoElapsedMs(); m.prompted=false; m.lowPrompted=false;
-  if(!state.chrono.offBlock){ state.chrono.offBlock=Date.now(); reqNotif(); reqWake(); }
-  saveState(); renderWB();
+  if(m.active){ stopFuelMgmt(); if(currentTab==='nav') renderNav(); else if(currentTab==='wb') renderWB(); return; }
+  if(!state.chrono.offBlock){ state.chrono.offBlock=Date.now(); state.track=[]; reqNotif(); reqWake(); }
+  startFuelMgmt(); if(currentTab==='nav') renderNav(); else if(currentTab==='wb') renderWB();
 }
 function fuelTick(){
   const m=state.fuelMgmt; if(!m||!m.active) return;
-  const cms=chronoElapsedMs(), dms=cms-(m.lastChronoMs||0);
-  if(dms<=0) return;
-  m.lastChronoMs=cms;
-  const burn=dms/3600000*P().fuelMgmtRate;
-  if(m.sel==="left") m.left=Math.max(0,(m.left||0)-burn); else m.right=Math.max(0,(m.right||0)-burn);
+  const cms=chronoElapsedMs(), prev=(m.lastChronoMs||0);
+  if(cms<=prev){ updateFuelPopup(); return; }
+  const burn=fuelBurnL(prev,cms); m.lastChronoMs=cms;
+  if(burn>0){ if(m.sel==="left") m.left=Math.max(0,(m.left||0)-burn); else m.right=Math.max(0,(m.right||0)-burn); }
   const sv=m.sel==="left"?m.left:m.right, ov=m.sel==="left"?m.right:m.left;
   if(!m.prompted && (sv<=ov/2 || sv<=0)){ m.prompted=true; saveState(); showFuelPop(); }
   const tot=(m.left||0)+(m.right||0);
   if(!m.lowPrompted && tot<20){ m.lowPrompted=true; saveState(); alertBanner("CARBURANT BAS","Total carburant < 20 L ("+fmt(tot)+" L restant)"); }
-  saveState();
-  if(currentTab==="wb") updateFuelMgmtDisplay();
+  saveState(); updateFuelPopup();
+  if(currentTab==="wb"||currentTab==="nav") updateFuelMgmtDisplay();
 }
 function updateFuelMgmtDisplay(){
   const m=state.fuelMgmt;
@@ -1124,16 +1157,24 @@ function updateFuelMgmtDisplay(){
   else { sel.textContent="—"; l.textContent="—"; rr.textContent="—"; }
 }
 const fuelpop=document.getElementById("fuelpop");
+function updateFuelPopup(){
+  const m=state.fuelMgmt; if(!fuelpop) return;
+  if(!m||!m.active){ fuelpop.classList.add("hide"); return; }
+  const selTxt=m.sel==="left"?"GAUCHE":"DROIT", other=m.sel==="left"?"DROIT":"GAUCHE";
+  const phase=inFlight()?"vol 35 L/h":"roulage 20 L/h";
+  const info=document.getElementById("fuelpopTxt");
+  if(info) info.innerHTML=(m.prompted?'<b style="color:var(--danger)">Passez sur '+other+'</b> · ':'')
+    +'sur <b>'+selTxt+'</b> · G '+fmt(m.left)+' L · D '+fmt(m.right)+' L <span style="opacity:.65">('+phase+')</span>';
+  fuelpop.classList.remove("hide");
+}
 function showFuelPop(){
   const m=state.fuelMgmt, other=m.sel==="left"?"DROIT":"GAUCHE";
-  document.getElementById("fuelpopTxt").textContent="Passez sur le réservoir "+other;
-  fuelpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]); sysNotify("Carburant","Passez sur le réservoir "+other);
+  updateFuelPopup(); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]); sysNotify("Carburant","Passez sur le réservoir "+other);
 }
 document.getElementById("fuelpopOk").onclick=()=>{
   const m=state.fuelMgmt; m.sel=m.sel==="left"?"right":"left"; m.prompted=false; m.lastChronoMs=chronoElapsedMs();
-  saveState(); fuelpop.classList.add("hide"); if(currentTab==="wb") updateFuelMgmtDisplay();
+  saveState(); updateFuelPopup(); if(currentTab==="wb"||currentTab==="nav") updateFuelMgmtDisplay();
 };
-document.getElementById("fuelpopHide").onclick=()=>fuelpop.classList.add("hide");
 
 /* ---- PERFORMANCES ---- */
 function renderPerf(){
@@ -1152,19 +1193,11 @@ function renderPerf(){
   const speedsLDG=`<div class="card"><h2>Vitesse approche</h2>
     <div class="kv"><span class="k">Vapp (volets 40)</span><span class="v">${r.speeds.vApproachFlaps40} kt + corr. vent</span></div></div>`;
   main.innerHTML=`
-  <div class="card"><h2>Conditions</h2>
-    <div class="kv"><span class="k">OAT / QNH</span><span class="v">${r.oat} °C / ${r.qnh} hPa <span class="muted" style="font-weight:600">(onglet Météo)</span></span></div>
-    <div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn ${state.perf.mode==='estim'?'accent':'ghost'}" id="modeEstim">Pré-estimation</button>
-      <button class="btn ${state.perf.mode==='manuel'?'accent':'ghost'}" id="modeManuel">Saisie abaque</button>
-    </div>
-    <button class="btn ghost" id="perfSync" style="margin-top:10px">&#8635; Reprendre les aérodromes de la route</button></div>
   <div class="seg">
     <button class="seg-b ${sub==='to'?'on':''}" id="subTO">&#128747; Décollage</button>
     <button class="seg-b ${sub==='ldg'?'on':''}" id="subLDG">&#128748; Atterrissage</button>
   </div>
-  ${sub==='to'?(perfCard('to')+speedsTO):(perfCard('ldg')+speedsLDG)}`;
+  ${sub==='to'?(condCard('to')+perfCard('to')+speedsTO):(condCard('ldg')+perfCard('ldg')+speedsLDG)}`;
   document.getElementById("modeEstim").onclick=()=>{state.perf.mode='estim';saveState();renderPerf();};
   document.getElementById("modeManuel").onclick=()=>{state.perf.mode='manuel';saveState();renderPerf();};
   document.getElementById("perfSync").onclick=()=>{ state.perf.to.icao=((state.meteo.dep||'')+'').toUpperCase(); state.perf.ldg.icao=((state.meteo.arr||'')+'').toUpperCase(); saveState(); renderPerf(); };
@@ -1172,6 +1205,27 @@ function renderPerf(){
   document.getElementById("subLDG").onclick=()=>{ state.perf.sub='ldg'; saveState(); renderPerf(); };
   bindPhase(sub);
   updatePerf();
+}
+function condCard(kind){
+  const isTO=kind==='to';
+  const cond=(isTO?state.meteo.depCond:state.meteo.arrCond)||state.meteo;
+  const hasMetar=(isTO?state.meteo.depCond:state.meteo.arrCond)!=null;
+  const icao=((isTO?state.meteo.dep:state.meteo.arr)||'').toUpperCase();
+  const oat=Math.round(num(cond.temp,isaTempC(0))), qnh=Math.round(num(cond.qnh,1013));
+  const wdir=(cond.windDir===''||cond.windDir==null)?'VRB':(cond.windDir+'°');
+  const wspd=(cond.windSpd===''||cond.windSpd==null)?'—':(cond.windSpd+' kt');
+  const src=hasMetar&&icao?('METAR '+icao):'onglet Météo';
+  const r=computePerf();
+  return `<div class="card"><h2>Conditions ${isTO?'décollage':'atterrissage'}</h2>
+    <div class="kv"><span class="k">OAT / QNH</span><span class="v">${oat} °C / ${qnh} hPa</span></div>
+    <div class="kv"><span class="k">Vent</span><span class="v">${wdir} / ${wspd}</span></div>
+    <div class="kv"><span class="k">Source météo</span><span class="v"><span class="muted" style="font-weight:600">${src}</span></span></div>
+    <div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ${state.perf.mode==='estim'?'accent':'ghost'}" id="modeEstim">Pré-estimation</button>
+      <button class="btn ${state.perf.mode==='manuel'?'accent':'ghost'}" id="modeManuel">Saisie abaque</button>
+    </div>
+    <button class="btn ghost" id="perfSync" style="margin-top:10px">&#8635; Reprendre les aérodromes de la route</button></div>`;
 }
 function perfCard(kind){
   const ph=state.perf[kind], isTO=kind==='to';
@@ -1242,11 +1296,10 @@ function renderChk(){
     <div id="chkList"></div>
     <button class="btn ${validated?'primary':'accent'}" id="chkValide" style="margin-top:10px">${validated?'&#10003; Checklist validée — annuler':'Valider la checklist'}</button></div>
   <div class="card"><h2>Déclenchement GPS</h2>
-    <div class="kv"><span class="k">GPS</span><span class="v" id="gpsState">${gpsActive?'actif':'inactif'}</span></div>
+    <div class="kv"><span class="k">GPS</span><span class="v" id="gpsState">${gpsActive?'actif':(state.settings&&state.settings.gpsAuto===false?'désactivé (Réglages)':'en attente')}</span></div>
     <div class="kv"><span class="k">Vitesse sol</span><span class="v" id="gpsGS">—</span></div>
     <div class="kv"><span class="k">Position</span><span class="v" id="gpsPos">—</span></div>
-    <button class="btn accent" id="gpsBtn" style="margin-top:8px">${gpsActive?'Désactiver le suivi GPS':'Activer le suivi GPS'}</button>
-    <div class="note" style="margin-top:8px">Roulage (>2 kt) · seuil de piste (<50 m) · approche destination.</div></div>`;
+    <div class="note" style="margin-top:8px">Suivi GPS actif par défaut (désactivable dans Réglages). Roulage (>2 kt) · seuil de piste (<50 m) · approche destination.</div></div>`;
   const list=document.getElementById("chkList"); let html="";
   phase.items.forEach((it)=>{
     if(it.action===""){ html+=`<div class="muted" style="font-weight:800;font-size:12px;letter-spacing:.5px;margin:10px 0 6px;color:var(--accent2)">${esc(it.item)}</div>`; return; }
@@ -1256,34 +1309,56 @@ function renderChk(){
   list.innerHTML=html;
   document.querySelectorAll(".chk-tabs button").forEach(b=>b.onclick=()=>{chkPhase=b.dataset.ph;renderChk();});
   document.getElementById("chkValide").onclick=()=>{ state.chk[chkPhase]=state.chk[chkPhase]||{}; state.chk[chkPhase].done=!state.chk[chkPhase].done; saveState(); renderChk(); };
-  document.getElementById("gpsBtn").onclick=toggleGPS;
   // Recentrer la barre d'onglets sur la checklist sélectionnée (évite le retour à gauche)
   const bar=document.querySelector(".chk-tabs"), act=bar&&bar.querySelector("button.on");
   if(bar&&act){ const off=act.getBoundingClientRect().left-bar.getBoundingClientRect().left+bar.scrollLeft-(bar.clientWidth-act.offsetWidth)/2; bar.scrollLeft=Math.max(0,off); }
 }
 
-/* ---- GPS ---- */
-let gpsActive=false,gpsWatch=null,gpsLast=null,gpsTriggered={},navTriggered={};
-function toggleGPS(){
-  if(gpsActive){ stopGPS(); return; }
-  if(!navigator.geolocation){ alert("Géolocalisation non disponible."); return; }
+/* ---- GPS (actif par défaut, désactivable dans Réglages) ---- */
+let gpsActive=false,gpsWatch=null,gpsLast=null,gpsTriggered={},navTriggered={},lastTrackT=0;
+function startGPS(){
+  if(gpsActive) return true;
+  if(!navigator.geolocation) return false;
   navTriggered={};
-  gpsWatch=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
-  gpsActive=true; reqNotif(); reqWake(); render();
+  try{ gpsWatch=navigator.geolocation.watchPosition(onGPS,onGPSErr,{enableHighAccuracy:true,maximumAge:1000,timeout:15000}); }
+  catch(e){ return false; }
+  gpsActive=true; reqWake(); return true;
 }
-function stopGPS(){ if(gpsWatch!=null) navigator.geolocation.clearWatch(gpsWatch); gpsActive=false; gpsWatch=null; relWake(); if(currentTab==='chk'||currentTab==='nav') render(); }
+function stopGPS(){ if(gpsWatch!=null) navigator.geolocation.clearWatch(gpsWatch); gpsActive=false; gpsWatch=null; relWake(); }
+function setGPS(on){ if(!state.settings) state.settings={}; state.settings.gpsAuto=!!on;
+  if(on){ if(!startGPS()) alert("Géolocalisation non disponible sur cet appareil."); } else { stopGPS(); }
+  saveState(); if(currentTab==='settings'||currentTab==='nav'||currentTab==='chk'||currentTab==='home') render(); }
+function toggleGPS(){ setGPS(!gpsActive); }
+function recordTrack(){
+  if(!gpsLast) return; const c=state.chrono;
+  if(!(c.offBlock&&!c.onBlock)) return;            // n'enregistre la trace qu'entre off-block et on-block
+  const now=Date.now(); const tr=state.track||(state.track=[]); const last=tr[tr.length-1];
+  if(last){ const d=distM(last.la,last.lo,gpsLast.lat,gpsLast.lon); if(d<25 && (now-lastTrackT)<4000) return; }
+  tr.push({la:+gpsLast.lat.toFixed(5),lo:+gpsLast.lon.toFixed(5),t:now}); lastTrackT=now;
+  if(tr.length>3000) tr.splice(0,tr.length-3000);
+  saveState();
+}
 function onGPSErr(e){ const el=document.getElementById("gpsState"); if(el) el.textContent="erreur"; }
 function onGPS(pos){
   const c=pos.coords, gsKt=(c.speed!=null&&isFinite(c.speed))?c.speed*1.94384:null;
   const hdg=(c.heading!=null&&isFinite(c.heading))?c.heading:null;
   gpsLast={lat:c.latitude,lon:c.longitude,alt:c.altitude,gs:gsKt,hdg:hdg,t:Date.now()};
+  recordTrack();
   if(currentTab==='chk'){
-    const gsEl=document.getElementById("gpsGS"),posEl=document.getElementById("gpsPos");
+    const gsEl=document.getElementById("gpsGS"),posEl=document.getElementById("gpsPos"),stEl=document.getElementById("gpsState");
+    if(stEl) stEl.textContent='actif';
     if(gsEl) gsEl.textContent=gsKt!=null?gsKt.toFixed(0)+" kt":"n/d";
     if(posEl) posEl.textContent=c.latitude.toFixed(4)+", "+c.longitude.toFixed(4);
   }
+  if(currentTab==='home') updateHomeGps();
   if(currentTab==='nav') updateNavGps();
   evalTriggers();
+}
+function updateHomeGps(){
+  if(currentTab!=='home') return;
+  const gs=document.getElementById('homeGS'), pos=document.getElementById('homePos');
+  if(gpsLast){ if(gs) gs.textContent=(gpsLast.gs!=null?gpsLast.gs.toFixed(0)+' kt':'n/d'); if(pos) pos.textContent=gpsLast.lat.toFixed(3)+', '+gpsLast.lon.toFixed(3); }
+  else { if(gs) gs.textContent='—'; if(pos) pos.textContent=gpsActive?'GPS…':'GPS off'; }
 }
 function distM(a,b,c,d){ const R=6371000,t=x=>x*Math.PI/180,dLat=t(c-a),dLon=t(d-b);
   const x=Math.sin(dLat/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
@@ -1387,21 +1462,27 @@ async function vacStatusInit(icao){ const st=document.getElementById('vacStatus'
 function renderNav(){
 
   const nl=state.navlog||[];
+  const dep=(state.meteo.dep||'').toUpperCase(), arr=(state.meteo.arr||'').toUpperCase();
+  const depPt=lookupAirport(dep), arrPt=lookupAirport(arr), arrCalc=computeArrLeg();
   const legs=nl.map((L,i)=>legRow(L,i)).join("");
-  const totDist=nl.reduce((s,L)=>s+(parseFloat(L.dist)||0),0);
+  const totDist=nl.reduce((s,L)=>s+(parseFloat(L.dist)||0),0)+(arrCalc?parseFloat(arrCalc.dist):0);
   const totTime=nl.reduce((s,L)=>s+(parseFloat(L.time)||0),0);
+  const fixSty='style="background:rgba(47,128,184,.08)"';
+  const depRow=dep?`<tr ${fixSty}><td class="nr">D</td><td><b>${esc(dep)}</b> <small style="opacity:.7">départ${depPt?' — '+esc(depPt.n):''}</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td></td></tr>`:'';
+  const arrRow=arr?`<tr ${fixSty}><td class="nr">A</td><td><b>${esc(arr)}</b> <small style="opacity:.7">arrivée${arrPt?' — '+esc(arrPt.n):''}</small></td><td>${arrCalc?arrCalc.cap+'°':'—'}</td><td>—</td><td>${arrCalc?arrCalc.dist:'—'}</td><td>—</td><td></td></tr>`:'';
+  const hasAny=dep||arr||nl.length;
   main.innerHTML=`
   <div class="eyebrow">Navigation</div>
   <div class="card"><h2>Plan de vol VFR</h2>
-    <div class="kv"><span class="k">Route</span><span class="v">${esc(state.meteo.dep||'—')} → ${esc(state.meteo.arr||'—')}</span></div></div>
+    <div class="kv"><span class="k">Route</span><span class="v">${esc(dep||'—')} → ${esc(arr||'—')}</span></div></div>
   <div class="card"><h2>Branches</h2>
-    ${nl.length?`<div class="navtbl-wrap"><table class="navtbl">
+    ${hasAny?`<div class="navtbl-wrap"><table class="navtbl">
       <thead><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Tps</th><th></th></tr></thead>
-      <tbody>${legs}</tbody>
+      <tbody>${depRow}${legs}${arrRow}</tbody>
       <tfoot><tr><td></td><td>Total</td><td></td><td></td><td>${totDist?totDist.toFixed(0):'—'}</td><td>${totTime?totTime.toFixed(0):'—'}</td><td></td></tr></tfoot>
-    </table></div>`:'<div class="note">Aucune branche. Ajoutez la première ci-dessous.</div>'}
-    <button class="btn primary" id="addLeg" style="margin-top:12px">+ Ajouter une branche</button>
-    <div class="note" style="margin-top:8px">Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées automatiquement. Le <b>cap (route vraie)</b> et la <b>distance</b> sont alors calculés automatiquement entre points géoréférencés (1re branche depuis le départ) — à corriger de la déclinaison et du vent.</div></div>
+    </table></div>`:'<div class="note">Renseignez le départ et l\'arrivée dans l\'onglet Vol — ils apparaîtront ici automatiquement.</div>'}
+    <button class="btn primary" id="addLeg" style="margin-top:12px">+ Ajouter un point intermédiaire</button>
+    <div class="note" style="margin-top:8px">Les terrains de <b>départ (D)</b> et d'<b>arrivée (A)</b> sont inclus d'office d'après l'onglet Vol. Ajoutez les points intermédiaires entre eux. Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées. Le <b>cap (route vraie)</b> et la <b>distance</b> sont calculés automatiquement entre points géoréférencés — à corriger de la déclinaison et du vent.</div></div>
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
       <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
@@ -1410,19 +1491,18 @@ function renderNav(){
     <div class="kv" style="margin-top:8px"><span class="k">Temps de vol (compteur)</span><span class="v" id="cptDelta">—</span></div>
     <div class="note" style="margin-top:6px">La sortie se remplit automatiquement en fin de vol (top On-block du chronomètre).</div></div>
   <div class="card"><h2>Suivi GPS</h2>
-    <div class="kv"><span class="k">GPS</span><span class="v" id="navGps">${gpsActive?'actif':'inactif'}</span></div>
+    <div class="kv"><span class="k">GPS</span><span class="v" id="navGps">${gpsActive?'actif':(state.settings&&state.settings.gpsAuto===false?'désactivé (Réglages)':'en attente')}</span></div>
     <div class="kv"><span class="k">Position</span><span class="v" id="navPos">—</span></div>
     <div class="kv"><span class="k">Vitesse sol / route</span><span class="v" id="navGs">—</span></div>
-    <button class="btn accent" id="navGpsBtn" style="margin-top:8px">${gpsActive?'Désactiver le suivi GPS':'Activer le suivi GPS'}</button>
-    <div class="note" style="margin-top:8px">Quand un point (avec coordonnées) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
+    <div class="kv"><span class="k">Trace enregistrée</span><span class="v" id="navTrack">${(state.track||[]).length} pts</span></div>
+    <div class="note" style="margin-top:8px">Suivi actif par défaut (désactivable dans Réglages). La trace réelle est enregistrée entre l'off-block et l'on-block et tracée sur la carte du carnet. Quand un point (avec coordonnées) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
   <div class="card"><h2>Gestion carburant en vol</h2>
-    <div class="note" style="margin-bottom:8px">Décollage sur le plus plein, conso ${P().fuelMgmtRate} L/h. Alerte quand un réservoir tombe à la moitié de l'autre.</div>
+    <div class="note" style="margin-bottom:8px">Démarrage <b>automatique à l'off-block</b> sur le réservoir le plus plein. Conso roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h. Le changement de réservoir se fait depuis la fenêtre flottante (présente sur toutes les pages). Désactivable dans Réglages.</div>
     <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
     <div class="kv"><span class="k">Gauche restant</span><span class="v" id="fmLeft">—</span></div>
     <div class="kv"><span class="k">Droit restant</span><span class="v" id="fmRight">—</span></div>
     <button class="btn ${state.fuelMgmt.active?'danger':'primary'}" id="fmBtn" style="margin-top:10px">${state.fuelMgmt.active?'Arrêter la gestion':'Démarrer la gestion'}</button></div>
   ${vacCard(state.meteo.dep)}`;
-  document.getElementById("navGpsBtn").onclick=toggleGPS;
   const fmb=document.getElementById("fmBtn"); if(fmb){ fmb.onclick=toggleFuelMgmt; updateFuelMgmtDisplay(); }
   document.getElementById("addLeg").onclick=()=>{ state.navlog.push({wpt:"",cap:"",alt:"",dist:"",time:"",obs:"",lat:"",lon:""}); navTriggered={}; saveState(); renderNav(); };
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
@@ -1439,6 +1519,11 @@ function legFrom(i){ if(i===0){ const d=lookupAirport((state.meteo.dep||'').toUp
 function legTo(i){ const l=state.navlog[i]; const la=parseFloat(l&&l.lat),lo=parseFloat(l&&l.lon); return (isFinite(la)&&isFinite(lo))?{la:la,lo:lo}:null; }
 function computeLeg(i){ const f=legFrom(i),t=legTo(i); if(!f||!t) return null; return { cap:Math.round(bearingDeg(f,t)), dist:(_hav(f.la,f.lo,t.la,t.lo)/1.852).toFixed(1) }; }
 function autoLegs(){ (state.navlog||[]).forEach((L,i)=>{ const c=computeLeg(i); if(c){ L.cap=String(c.cap); L.dist=String(c.dist); } }); }
+function lastRoutePoint(){ /* dernier point géoréférencé avant l'arrivée, sinon le départ */
+  for(let i=(state.navlog||[]).length-1;i>=0;i--){ const L=state.navlog[i]; const la=parseFloat(L.lat),lo=parseFloat(L.lon); if(isFinite(la)&&isFinite(lo)) return {la:la,lo:lo}; }
+  const d=lookupAirport((state.meteo.dep||'').toUpperCase()); return d?{la:d.la,lo:d.lo}:null;
+}
+function computeArrLeg(){ const a=lookupAirport((state.meteo.arr||'').toUpperCase()), f=lastRoutePoint(); if(!a||!f) return null; return { cap:Math.round(bearingDeg(f,{la:a.la,lo:a.lo})), dist:(_hav(f.la,f.lo,a.la,a.lo)/1.852).toFixed(1) }; }
 function refreshLegCalc(i){ [i,i+1].forEach(k=>{ if(!state.navlog||!state.navlog[k]) return; const c=computeLeg(k); const cc=document.getElementById('leg'+k+'cap'),dd=document.getElementById('leg'+k+'dist'); if(c){ state.navlog[k].cap=String(c.cap); state.navlog[k].dist=String(c.dist); if(cc){ cc.value=c.cap; cc.readOnly=true; } if(dd){ dd.value=c.dist; dd.readOnly=true; } } else { if(cc) cc.readOnly=false; if(dd) dd.readOnly=false; } }); saveState(); }
 function legRow(L,i){
   const auto=computeLeg(i);
@@ -1466,8 +1551,9 @@ function legRow(L,i){
 function bindLeg(i,f){ const el=document.getElementById('leg'+i+f); if(!el) return; el.addEventListener('input',()=>{ state.navlog[i][f]=el.value; if(f==='wpt'){ const m=el.value.toUpperCase().match(/\b(LF[A-Z]{2}|[A-Z]{4})\b/); if(m){ const a=lookupAirport(m[1]); if(a){ state.navlog[i].lat=a.la; state.navlog[i].lon=a.lo; const la=document.getElementById('leg'+i+'lat'),lo=document.getElementById('leg'+i+'lon'); if(la) la.value=a.la; if(lo) lo.value=a.lo; } } } if(f==='wpt'||f==='lat'||f==='lon') refreshLegCalc(i); saveState(); }); }
 function updateNavGps(){
   if(currentTab!=='nav') return;
-  const g=document.getElementById('navGps'); if(g) g.textContent=gpsActive?'actif':'inactif';
-  const pos=document.getElementById('navPos'), gs=document.getElementById('navGs');
+  const g=document.getElementById('navGps'); if(g) g.textContent=gpsActive?'actif':(state.settings&&state.settings.gpsAuto===false?'d\u00e9sactiv\u00e9 (R\u00e9glages)':'en attente');
+  const pos=document.getElementById('navPos'), gs=document.getElementById('navGs'), tk=document.getElementById('navTrack');
+  if(tk) tk.textContent=(state.track||[]).length+' pts';
   if(gpsLast){ if(pos) pos.textContent=gpsLast.lat.toFixed(4)+', '+gpsLast.lon.toFixed(4);
     if(gs) gs.textContent=(gpsLast.gs!=null?gpsLast.gs.toFixed(0)+' kt':'n/d')+(gpsLast.hdg!=null?' / '+gpsLast.hdg.toFixed(0)+'\u00b0':''); }
   else { if(pos) pos.textContent='\u2014'; if(gs) gs.textContent='\u2014'; }
@@ -1489,21 +1575,25 @@ function renderCard(){
     <div class="kv"><span class="k">Centrage</span><span class="v">${valid?'<span class="pill ok">VALIDE</span>':'<span class="pill bad">HORS ENVELOPPE</span>'}</span></div>
     <div class="kv"><span class="k">Checklists normales</span><span class="v">${chkDone?'<span class="pill ok">COMPLÉTÉES</span>':'<span class="pill warn">PARTIELLES</span>'}</span></div></div>
   <div class="card"><h2>Enveloppe de centrage</h2><div style="text-align:center">${envelopeSVG(r)}</div></div>
-  <div class="card"><h2>Trajet prévu</h2><div style="text-align:center">${routeMap()}</div>
-    <div class="note" style="margin-top:8px">Route directe (pointillés) ou selon les points du plan de vol dont les coordonnées sont saisies.</div></div>
+  <div class="card"><h2>Trajet — prévu &amp; réel</h2><div style="text-align:center">${routeMap()}</div>
+    <div class="note" style="margin-top:8px"><b style="color:#1d4ed8">Bleu</b> = route prévue (départ → points → arrivée). <b style="color:#d23b3b">Rouge</b> = route réelle enregistrée par le GPS pendant le vol.</div></div>
   <div class="card"><h2>Signature du PIC</h2>
-    <canvas id="sigpad"></canvas>
+    ${state.chrono.onBlock?`<canvas id="sigpad"></canvas>
     <div class="row" style="margin-top:10px">
       <button class="btn ghost" id="sigClear">Effacer</button>
       <button class="btn primary" id="sigSave">Valider la signature</button></div>
-    <div id="sigStatus" class="note" style="margin-top:6px">${state.sig?'<span class="pill ok">Signature enregistrée</span>':'Non signée'}</div></div>
+    <div id="sigStatus" class="note" style="margin-top:6px">${state.sig?'<span class="pill ok">Signature enregistrée</span>':'Non signée'}</div>`
+    :`<div style="text-align:center;padding:18px"><div class="pill warn" style="font-size:15px;padding:9px 16px">SIGNATURE VERROUILLÉE</div>
+      <p class="note" style="margin-top:12px">Le vol ne peut être signé qu'<b>en fin de vol</b>, une fois l'<b>On-block</b> enregistré (onglet Bord).</p></div>`}</div>
   <div class="card"><h2>Export</h2>
     <button class="btn accent" id="btnPdf">Générer la fiche de vol (PDF / impression)</button>
     <div class="note" style="margin-top:8px">Sur iPad : <b>Imprimer → Enregistrer en PDF</b>.</div></div>`;
   bindInput("picName",v=>state.pic=v,true);
-  setupSigPad();
-  document.getElementById("sigClear").onclick=clearSig;
-  document.getElementById("sigSave").onclick=()=>{ state.sig=sigCanvas.toDataURL("image/png"); saveState(); document.getElementById("sigStatus").innerHTML='<span class="pill ok">Signature enregistrée</span>'; };
+  if(state.chrono.onBlock){
+    setupSigPad();
+    document.getElementById("sigClear").onclick=clearSig;
+    document.getElementById("sigSave").onclick=()=>{ state.sig=sigCanvas.toDataURL("image/png"); saveState(); document.getElementById("sigStatus").innerHTML='<span class="pill ok">Signature enregistrée</span>'; };
+  }
   document.getElementById("btnPdf").onclick=exportPDF;
   fitRouteMap();
 }
@@ -1540,7 +1630,7 @@ function exportPDF(){
     +'<tr><th>OAT / QNH</th><td>'+perf.oat+' °C / '+perf.qnh+' hPa</td><th>Vr/Vx/Vy · Vapp</th><td>'+perf.speeds.vr+'/'+perf.speeds.vx+'/'+perf.speeds.vy+' · '+perf.speeds.vApproachFlaps40+' kt</td></tr></table>'; }
   h+='<h3>Conditions / route</h3><div class="box mono">Route : '+esc(state.meteo.dep||'\u2014')+' \u2192 '+esc(state.meteo.arr||'\u2014')
     +'\nVent '+esc(state.meteo.windDir)+'\u00b0 / '+esc(state.meteo.windSpd)+' kt \u2014 '+esc(state.meteo.temp)+' \u00b0C \u2014 QNH '+esc(state.meteo.qnh)+' hPa</div>';
-  h+='<h3>Trajet prévu</h3><div class="box" style="text-align:center">'+routeMap()+'</div>';
+  h+='<h3>Trajet (prévu &amp; réel)</h3><div class="box" style="text-align:center">'+routeMap()+'</div>';
   if(navRows) h+='<h3>Plan de vol</h3><table><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Temps</th><th>Obs.</th></tr>'+navRows+'</table>';
   h+='<h3>Compteur &amp; temps</h3><div class="box">Compteur entr\u00e9e : <b>'+esc(state.compteur.entree||'\u2014')+'</b> \u00b7 sortie : <b>'+esc(state.compteur.sortie||'\u2014')+'</b> \u00b7 temps compteur : <b>'+cdelta+'</b><br>Temps bloc : <b>'+fmtHMS(chBlockMs())+'</b> · Temps de vol : <b>'+fmtHMS(chAirMs())+'</b></div>';
   h+='<div class="box">Checklists normales compl\u00e9t\u00e9es : <b class="'+(chkDone?'ok':'bad')+'">'+(chkDone?'OUI':'NON')+'</b></div>';
@@ -1588,10 +1678,12 @@ document.getElementById("vacBack").onclick=()=>{ document.getElementById("vacvie
 document.getElementById("pdfPrint").onclick=()=>window.print();
 render();
 updateChronoChip();
-function appTick(){ updateChronoChip(); fuelTick(); if(currentTab==='nav') updateNavGps(); }
+updateFuelPopup();
+if(!state.settings || state.settings.gpsAuto!==false){ try{ startGPS(); }catch(e){} }
+function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home') updateHomeGps(); }
 setInterval(appTick,1000);
 window.addEventListener("orientationchange",()=>setTimeout(render,250));
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ updateChronoChip(); fuelTick(); reqWake(); } });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ updateChronoChip(); fuelTick(); updateFuelPopup(); if((!state.settings||state.settings.gpsAuto!==false)&&!gpsActive){ try{ startGPS(); }catch(e){} } reqWake(); } });
 </script>
 </body>
 </html>
