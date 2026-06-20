@@ -511,6 +511,24 @@ function emergencyChecklists(){
 }
 /* ===== ÉTAT ===== */
 const LS_KEY="envol_efb_state_v2";
+/* ===== PROFILS PILOTES ===== (chaque profil = état indépendant, propre clé localStorage) */
+const PROF_KEY="envol_efb_profiles";
+let profiles=loadProfiles();
+function loadProfiles(){
+  try{ const p=JSON.parse(localStorage.getItem(PROF_KEY)); if(p&&Array.isArray(p.list)&&p.list.length){ if(!p.list.some(x=>x.id===p.active)) p.active=p.list[0].id; return p; } }catch(e){}
+  const reg={ active:"default", list:[{ id:"default", name:"Pilote", key:LS_KEY }] };
+  try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.pic) reg.list[0].name=s.pic; }catch(e){}
+  try{ localStorage.setItem(PROF_KEY,JSON.stringify(reg)); }catch(e){}
+  return reg;
+}
+function saveProfiles(){ try{ localStorage.setItem(PROF_KEY,JSON.stringify(profiles)); }catch(e){} }
+function activeProfile(){ return profiles.list.find(p=>p.id===profiles.active)||profiles.list[0]; }
+function activeKey(){ return activeProfile().key; }
+function newProfileId(){ return "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function createProfile(name){ const id=newProfileId(), key=LS_KEY+"__"+id, nm=(name||"Pilote").trim()||"Pilote"; profiles.list.push({ id, name:nm, key }); saveProfiles(); try{ const s=defaultState(); s.pic=(name||"").trim(); localStorage.setItem(key,JSON.stringify(s)); }catch(e){} return id; }
+function renameProfile(id,name){ const p=profiles.list.find(x=>x.id===id); if(p){ p.name=(name||"").trim()||p.name; saveProfiles(); } }
+function deleteProfile(id){ if(profiles.list.length<=1) return false; const p=profiles.list.find(x=>x.id===id); if(!p) return false; try{ localStorage.removeItem(p.key); }catch(e){} const wasActive=(profiles.active===id); profiles.list=profiles.list.filter(x=>x.id!==id); if(wasActive) profiles.active=profiles.list[0].id; saveProfiles(); return wasActive; }
+function switchProfile(id){ if(id===profiles.active) return; saveState(); profiles.active=id; saveProfiles(); }
 function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
@@ -525,8 +543,8 @@ function defaultState(){
     chk:{}, sig:null, pic:"" };
 }
 let state=loadState();
-function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!Array.isArray(st.archives)) st.archives=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
-function saveState(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(state)); }catch(e){} }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem(activeKey())); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!Array.isArray(st.archives)) st.archives=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
+function saveState(){ try{ localStorage.setItem(activeKey(),JSON.stringify(state)); }catch(e){} }
 function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
 
@@ -707,8 +725,19 @@ function renderSettings(){
   const granted=("Notification" in window)&&Notification.permission==="granted";
   const gpsAutoOn=!state.settings||state.settings.gpsAuto!==false;
   const fuelAutoOn=!state.settings||state.settings.fuelAuto!==false;
+  const profBtn='display:inline-flex;width:auto;min-height:0;padding:7px 12px;font-size:13px;font-weight:700;border-radius:10px';
+  const profRows=profiles.list.map(pr=>{ const act=pr.id===profiles.active; return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)">
+    <span style="flex:1;min-width:110px;font-weight:700">${esc(pr.name)}${act?' <b style="color:var(--accent);font-weight:800">• actif</b>':''}</span>
+    ${act?'':`<button class="btn" data-prof-sw="${pr.id}" style="${profBtn}">Activer</button>`}
+    <button class="btn" data-prof-rn="${pr.id}" style="${profBtn}">Renommer</button>
+    ${profiles.list.length>1?`<button class="btn" data-prof-del="${pr.id}" style="${profBtn};color:#d23b3b">Suppr.</button>`:''}
+  </div>`; }).join('');
   main.innerHTML=`
   <div class="eyebrow">Réglages</div>
+  <div class="card"><h2>Profils pilotes</h2>
+    <div class="note">Chaque profil possède ses propres vols, archives et réglages, totalement indépendants. Pratique pour partager l'application entre plusieurs pilotes sur le même appareil.</div>
+    <div style="margin:12px 0 4px">${profRows}</div>
+    <button class="btn accent" id="profNew" style="margin-top:8px">+ Nouveau profil pilote</button></div>
   <div class="card"><h2>Notifications &amp; écran</h2>
     <div class="note">Alertes système (réservoir, checklist automatique, point tournant, carburant bas) et maintien de l'écran allumé pendant le vol.</div>
     <button class="btn ${granted?'primary':'accent'}" id="setNotif" style="margin-top:10px">${granted?'&#10003; Notifications activées':'&#128276; Activer les notifications'}</button>
@@ -735,6 +764,11 @@ function renderSettings(){
   <div class="card"><h2>À propos</h2>
     <div class="note">ALTEON FLY — aide à la décision <b>non certifiée</b>. Le commandant de bord reste seul responsable. Base aérodromes : OurAirports (domaine public). Cartes VAC : SIA (Licence Ouverte Etalab).</div></div>`;
   document.getElementById("setNotif").onclick=reqNotif;
+  const profNew=document.getElementById("profNew");
+  if(profNew) profNew.onclick=()=>{ const n=prompt("Nom du nouveau pilote :",""); if(n===null) return; const nm=n.trim(); if(!nm) return; const id=createProfile(nm); switchProfile(id); location.reload(); };
+  main.querySelectorAll("[data-prof-sw]").forEach(b=>b.onclick=()=>{ switchProfile(b.getAttribute("data-prof-sw")); location.reload(); });
+  main.querySelectorAll("[data-prof-rn]").forEach(b=>b.onclick=()=>{ const id=b.getAttribute("data-prof-rn"); const cur=(profiles.list.find(x=>x.id===id)||{}).name||''; const n=prompt("Renommer le profil :",cur); if(n===null) return; renameProfile(id,n); renderSettings(); });
+  main.querySelectorAll("[data-prof-del]").forEach(b=>b.onclick=()=>{ const id=b.getAttribute("data-prof-del"); const pr=profiles.list.find(x=>x.id===id); if(!pr) return; if(!confirm('Supprimer le profil « '+pr.name+' » et toutes ses données (vols, archives) ? Action irréversible.')) return; const wasActive=deleteProfile(id); if(wasActive) location.reload(); else renderSettings(); });
   document.getElementById("setArchive").onclick=()=>{ currentTab='archive'; render(); };
   document.getElementById("setGps").onclick=()=>setGPS(!gpsAutoOn);
   document.getElementById("setFuel").onclick=()=>{ if(!state.settings) state.settings={}; state.settings.fuelAuto=!fuelAutoOn; if(state.settings.fuelAuto && state.chrono.offBlock && !state.chrono.onBlock && !(state.fuelMgmt&&state.fuelMgmt.active)) startFuelMgmt(); saveState(); renderSettings(); };
