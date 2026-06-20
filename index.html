@@ -715,7 +715,7 @@ function renderSettings(){
     <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
     <div class="kv"><span class="k">Gestion carburant auto</span><span class="v">${state.fuelMgmt&&state.fuelMgmt.active?'active':'en veille'}</span></div>
     <button class="btn ${fuelAutoOn?'primary':'ghost'}" id="setFuel" style="margin-top:8px">${fuelAutoOn?'&#10003; Démarrage auto à l\'off-block':'Démarrage manuel'}</button>
-    <div class="note" style="margin-top:8px">Si activé, la gestion carburant démarre seule à l'off-block (roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h). La fenêtre flottante de changement de réservoir reste affichée sur toutes les pages.</div></div>
+    <div class="note" style="margin-top:8px">Si activé, la gestion carburant démarre seule à l'off-block (roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h). Une fenêtre n'apparaît que lorsqu'il faut changer de réservoir, sur n'importe quelle page.</div></div>
   <div class="card"><h2>Appareil</h2>
     <div class="kv"><span class="k">Type</span><span class="v">${esc(p.type)}</span></div>
     <div class="kv"><span class="k">Immatriculation</span><span class="v">${esc(p.immat)}</span></div>
@@ -1157,23 +1157,24 @@ function updateFuelMgmtDisplay(){
   else { sel.textContent="—"; l.textContent="—"; rr.textContent="—"; }
 }
 const fuelpop=document.getElementById("fuelpop");
-function updateFuelPopup(){
+function fuelPopContent(){
+  const m=state.fuelMgmt, other=m.sel==="left"?"DROIT":"GAUCHE";
+  const info=document.getElementById("fuelpopTxt");
+  if(info) info.innerHTML='<b style="color:var(--danger)">Passez sur '+other+'</b> · G '+fmt(m.left)+' L · D '+fmt(m.right)+' L';
+}
+function updateFuelPopup(){ /* la popup ne s'affiche que sur demande de changement ; ici on rafraîchit/masque seulement */
   const m=state.fuelMgmt; if(!fuelpop) return;
   if(!m||!m.active){ fuelpop.classList.add("hide"); return; }
-  const selTxt=m.sel==="left"?"GAUCHE":"DROIT", other=m.sel==="left"?"DROIT":"GAUCHE";
-  const phase=inFlight()?"vol 35 L/h":"roulage 20 L/h";
-  const info=document.getElementById("fuelpopTxt");
-  if(info) info.innerHTML=(m.prompted?'<b style="color:var(--danger)">Passez sur '+other+'</b> · ':'')
-    +'sur <b>'+selTxt+'</b> · G '+fmt(m.left)+' L · D '+fmt(m.right)+' L <span style="opacity:.65">('+phase+')</span>';
-  fuelpop.classList.remove("hide");
+  if(!fuelpop.classList.contains("hide")) fuelPopContent();
 }
 function showFuelPop(){
   const m=state.fuelMgmt, other=m.sel==="left"?"DROIT":"GAUCHE";
-  updateFuelPopup(); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]); sysNotify("Carburant","Passez sur le réservoir "+other);
+  if(!fuelpop) return; fuelPopContent();
+  fuelpop.classList.remove("hide"); beep(); if(navigator.vibrate) navigator.vibrate([100,60,100]); sysNotify("Carburant","Passez sur le réservoir "+other);
 }
 document.getElementById("fuelpopOk").onclick=()=>{
   const m=state.fuelMgmt; m.sel=m.sel==="left"?"right":"left"; m.prompted=false; m.lastChronoMs=chronoElapsedMs();
-  saveState(); updateFuelPopup(); if(currentTab==="wb"||currentTab==="nav") updateFuelMgmtDisplay();
+  saveState(); fuelpop.classList.add("hide"); if(currentTab==="wb"||currentTab==="nav") updateFuelMgmtDisplay();
 };
 
 /* ---- PERFORMANCES ---- */
@@ -1497,13 +1498,12 @@ function renderNav(){
     <div class="kv"><span class="k">Trace enregistrée</span><span class="v" id="navTrack">${(state.track||[]).length} pts</span></div>
     <div class="note" style="margin-top:8px">Suivi actif par défaut (désactivable dans Réglages). La trace réelle est enregistrée entre l'off-block et l'on-block et tracée sur la carte du carnet. Quand un point (avec coordonnées) est atteint (< 0,8 NM), une alerte annonce la branche suivante.</div></div>
   <div class="card"><h2>Gestion carburant en vol</h2>
-    <div class="note" style="margin-bottom:8px">Démarrage <b>automatique à l'off-block</b> sur le réservoir le plus plein. Conso roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h. Le changement de réservoir se fait depuis la fenêtre flottante (présente sur toutes les pages). Désactivable dans Réglages.</div>
+    <div class="note" style="margin-bottom:8px">Démarrage <b>automatique à l'off-block</b> sur le réservoir le plus plein. Conso roulage ${P().fuelTaxiRate||20} L/h · vol ${P().fuelMgmtRate||35} L/h. Une fenêtre s'affiche <b>uniquement quand il faut changer de réservoir</b> (sur n'importe quelle page) et disparaît dès que vous confirmez. Désactivable dans Réglages.</div>
     <div class="kv"><span class="k">Réservoir sélectionné</span><span class="v" id="fmSel">—</span></div>
     <div class="kv"><span class="k">Gauche restant</span><span class="v" id="fmLeft">—</span></div>
-    <div class="kv"><span class="k">Droit restant</span><span class="v" id="fmRight">—</span></div>
-    <button class="btn ${state.fuelMgmt.active?'danger':'primary'}" id="fmBtn" style="margin-top:10px">${state.fuelMgmt.active?'Arrêter la gestion':'Démarrer la gestion'}</button></div>
+    <div class="kv"><span class="k">Droit restant</span><span class="v" id="fmRight">—</span></div></div>
   ${vacCard(state.meteo.dep)}`;
-  const fmb=document.getElementById("fmBtn"); if(fmb){ fmb.onclick=toggleFuelMgmt; updateFuelMgmtDisplay(); }
+  updateFuelMgmtDisplay();
   document.getElementById("addLeg").onclick=()=>{ state.navlog.push({wpt:"",cap:"",alt:"",dist:"",time:"",obs:"",lat:"",lon:""}); navTriggered={}; saveState(); renderNav(); };
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
     const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); };
