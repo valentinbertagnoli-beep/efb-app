@@ -197,7 +197,8 @@
   .top-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
   .iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:11px;min-width:44px;min-height:44px;font-size:19px;line-height:1;cursor:pointer;color:var(--ink);display:flex;align-items:center;justify-content:center;}
   .iconbtn:active{background:var(--line);}
-  @media(max-width:540px){ #immatBadge{display:none;} #acftSelect{max-width:104px;} }
+  @media(max-width:540px){ #acftSelect{max-width:104px;} }
+  .badge.badge-on{background:var(--accent);color:#fff;border-color:var(--accent);}
   nav button.on{border-top-color:var(--accent);}
   .seg{display:flex;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:14px;}
   .seg-b{flex:1;border:none;background:transparent;border-radius:10px;padding:12px 8px;min-height:48px;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer;}
@@ -267,7 +268,7 @@
     <div class="logo" id="homeBtn" style="cursor:pointer"><img id="logoImg" alt="ALTEON FLY" style="width:34px;height:34px;border-radius:8px;display:block"><div>ALTEON <b>FLY</b></div></div>
     <div class="top-right">
       <button id="chrono" class="chrono" title="Chronomètre de vol">&#9201; 0:00</button>
-      <span class="badge" id="immatBadge">F-GRLA</span>
+      <button class="badge" id="bordBtn" title="Tableau de bord" style="cursor:pointer;border:1px solid #bcd9ef">&#128202; Bord</button>
       <select id="acftSelect" aria-label="Choix avion"></select>
       <button id="chkBtn" class="iconbtn" title="Checklists">&#9745;</button>
       <button id="carnetBtn" class="iconbtn" title="Carnet / Export">&#128221;</button>
@@ -276,9 +277,9 @@
   </header>
   <main id="main"></main>
   <nav id="nav">
-    <button data-tab="home" class="on"><span class="ic">&#128202;</span>Bord</button>
-    <button data-tab="profil"><span class="ic">&#128747;</span>Vol</button>
+    <button data-tab="profil" class="on"><span class="ic">&#128747;</span>Vol</button>
     <button data-tab="meteo"><span class="ic">&#127780;</span>Météo</button>
+    <button data-tab="notam"><span class="ic">&#128203;</span>NOTAM</button>
     <button data-tab="wb"><span class="ic">&#9878;</span>Masse</button>
     <button data-tab="perf"><span class="ic">&#128200;</span>Perfo</button>
     <button data-tab="nav"><span class="ic">&#129517;</span>Nav</button>
@@ -541,11 +542,12 @@ function defaultState(){
     chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
     compteur:{ entree:"", sortie:"" },
     navlog:[], track:[], archives:[],
+    notam:{ dep:null, arr:null, ts:null },
     settings:{ gpsAuto:true, fuelAuto:true },
     chk:{}, sig:null, pic:"" };
 }
 let state=loadState();
-function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!Array.isArray(st.archives)) st.archives=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; return st; }}catch(e){} return defaultState(); }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem(LS_KEY)); if(s&&s.acft){ const st=Object.assign(defaultState(),s); if(!st.chrono||!('offBlock' in st.chrono)) st.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; if(!Array.isArray(st.track)) st.track=[]; if(!Array.isArray(st.archives)) st.archives=[]; if(!st.settings||typeof st.settings!=='object') st.settings={gpsAuto:true,fuelAuto:true}; if(st.settings.gpsAuto===undefined) st.settings.gpsAuto=true; if(st.settings.fuelAuto===undefined) st.settings.fuelAuto=true; if(!st.notam||typeof st.notam!=='object') st.notam={dep:null,arr:null,ts:null}; return st; }}catch(e){} return defaultState(); }
 function saveState(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(state)); }catch(e){} }
 function P(){ return AIRCRAFT_PROFILES[state.acft]; }
 function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:0); }
@@ -564,10 +566,10 @@ document.querySelectorAll("#nav button").forEach(b=>{
 });
 function lockPerfTab(lock){ const b=document.querySelector('#nav button[data-tab="perf"]'); if(b) b.style.opacity=lock?.45:1; }
 const acftSel=document.getElementById("acftSelect");
-Object.keys(AIRCRAFT_PROFILES).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=AIRCRAFT_PROFILES[k].type; acftSel.appendChild(o); });
+Object.keys(AIRCRAFT_PROFILES).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=AIRCRAFT_PROFILES[k].immat; acftSel.appendChild(o); });
 acftSel.value=state.acft;
-acftSel.addEventListener("change",()=>{ state.acft=acftSel.value; document.getElementById("immatBadge").textContent=P().immat; saveState(); render(); });
-document.getElementById("immatBadge").textContent=P().immat;
+acftSel.addEventListener("change",()=>{ state.acft=acftSel.value; saveState(); render(); });
+document.getElementById("bordBtn").onclick=()=>{ currentTab="home"; render(); };
 
 /* ===== W&B ===== */
 function wbInputs(){
@@ -651,9 +653,11 @@ function render(){
   lockPerfTab(!wbValid());
   autoLegs();
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab));
+  const bb=document.getElementById("bordBtn"); if(bb) bb.classList.toggle("badge-on",currentTab==="home");
   if(currentTab==="home") renderHome();
   else if(currentTab==="profil") renderProfil();
   else if(currentTab==="meteo") renderMeteo();
+  else if(currentTab==="notam") renderNotam();
   else if(currentTab==="wb") renderWB();
   else if(currentTab==="perf") renderPerf();
   else if(currentTab==="chk") renderChk();
@@ -921,6 +925,62 @@ async function loadMeteo(){
     if(st) st.innerHTML='<span class="pill ok">Mis à jour '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' · perfos alimentées</span>';
     const wx=document.getElementById("mtWx"); if(wx) wx.innerHTML=renderMeteoWx();
   }catch(e){ if(st) st.innerHTML='<span class="pill bad">Échec — réseau/proxy indisponible (coller un METAR dans l\'onglet Vol)</span>'; }
+}
+/* ===== NOTAM : départ + arrivée (source FAA NOTAM Search, ICAO international) ===== */
+async function notamFetchICAO(icao){
+  icao=(icao||'').toUpperCase().trim(); if(icao.length<4) return null;
+  const target='https://notams.aim.faa.gov/notamSearch/search';
+  const body=new URLSearchParams({searchType:'0',designatorsForLocation:icao,radius:'10',sortColumns:'5 false',sortDirection:'true',offset:'0',notamsOnly:'false',flightPathBufferWidth:'4',latMinutes:'0',latSeconds:'0',longMinutes:'0',longSeconds:'0',flightPathIncludeNavaids:'true',flightPathIncludeTfr:'true',flightPathResultsType:'All NOTAMs'}).toString();
+  const urls=['https://corsproxy.io/?url='+encodeURIComponent(target), target];
+  for(const u of urls){ try{ const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body,cache:'no-store'}); if(r.ok){ const j=await r.json(); if(j&&Array.isArray(j.notamList)) return j.notamList; } }catch(e){} }
+  return null;
+}
+function deEnt(s){ return String(s||'').replace(/&#(\d+);/g,(m,d)=>String.fromCharCode(+d)).replace(/&apos;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); }
+function notamItem(n){
+  let raw=deEnt(n.icaoMessage||n.traditionalMessage||n.message||'').replace(/\r/g,'').trim();
+  raw=raw.replace(/^ORIGINAL NOTAM\s*/i,'').replace(/^\(/,'').replace(/\)\s*$/,'').trim();
+  return { num:n.notamNumber||'', feat:n.featureName||'', start:n.startDate||'', end:n.endDate||'', raw:raw };
+}
+function notamCard(role,icao,list){
+  if(!icao) return '';
+  if(list==null) return `<div class="card"><h2>${role} — ${esc(icao)}</h2><div class="note">Aucune donnée — appuyez sur « Actualiser les NOTAM ».</div></div>`;
+  if(!list.length) return `<div class="card"><h2>${role} — ${esc(icao)}</h2><div class="note">Aucun NOTAM actif.</div></div>`;
+  const body=list.map(n=>`<div style="border-top:1px solid var(--line);padding:9px 0">
+      <div style="font-weight:800;font-size:13px;color:var(--accent2)">${esc(n.num)}${n.feat?' <span class="muted" style="font-weight:600">· '+esc(n.feat)+'</span>':''}</div>
+      <div class="mono" style="white-space:pre-wrap;margin-top:3px;font-size:12px">${esc(n.raw)}</div>
+      <div class="note" style="margin-top:4px">Du ${esc(n.start)} au ${esc(n.end)}</div></div>`).join('');
+  return `<div class="card"><h2>${role} — ${esc(icao)} <span class="pill" style="background:#2563eb22;color:#2563eb;border:1px solid #2563eb66">${list.length} NOTAM</span></h2>${body}</div>`;
+}
+function renderNotamList(){ const m=state.meteo,nt=state.notam||{}; return notamCard('Départ',(m.dep||'').toUpperCase(),nt.dep)+notamCard('Arrivée',(m.arr||'').toUpperCase(),nt.arr); }
+function renderNotam(){
+  const m=state.meteo, nt=state.notam||{};
+  const upd=nt.ts?(' · mis à jour '+new Date(nt.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})):'';
+  main.innerHTML=`
+  <div class="eyebrow">NOTAM du vol</div>
+  <div class="card"><h2>Route</h2>
+    <div class="row">
+      <label class="fld">Départ (OACI)<input id="ntDep" value="${esc(m.dep)}" placeholder="LFPA" maxlength="4" autocapitalize="characters" autocomplete="off"></label>
+      <label class="fld">Destination (OACI)<input id="ntArr" value="${esc(m.arr)}" placeholder="LFPN" maxlength="4" autocapitalize="characters" autocomplete="off"></label>
+    </div>
+    <div class="note" style="margin:8px 0">NOTAM en vigueur au départ et à l'arrivée. Source : FAA NOTAM Search (couverture ICAO internationale).${upd}</div>
+    <button class="btn primary" id="ntLoad">&#8635; Actualiser les NOTAM</button>
+    <div id="ntStatus" class="note" style="margin-top:8px"></div>
+  </div>
+  <div id="ntList">${(nt.dep||nt.arr)?renderNotamList():'<div class="note" style="text-align:center;padding:18px">Appuyez sur « Actualiser les NOTAM ».</div>'}</div>`;
+  bindInput("ntDep",v=>{state.meteo.dep=v.toUpperCase();});
+  bindInput("ntArr",v=>{state.meteo.arr=v.toUpperCase();});
+  document.getElementById("ntLoad").onclick=loadNotam;
+}
+async function loadNotam(){
+  const st=document.getElementById('ntStatus'); const dep=(state.meteo.dep||'').toUpperCase().trim(), arr=(state.meteo.arr||'').toUpperCase().trim();
+  if(st) st.innerHTML='<span class="pill warn">Chargement des NOTAM…</span>';
+  if(!state.notam) state.notam={dep:null,arr:null,ts:null};
+  let any=false, fail=false;
+  if(dep.length===4){ const l=await notamFetchICAO(dep); if(l){ state.notam.dep=l.map(notamItem); any=true; } else fail=true; }
+  if(arr.length===4){ const l=await notamFetchICAO(arr); if(l){ state.notam.arr=l.map(notamItem); any=true; } else fail=true; }
+  state.notam.ts=Date.now(); saveState();
+  const list=document.getElementById('ntList'); if(list) list.innerHTML=renderNotamList();
+  if(st) st.innerHTML = any?('<span class="pill ok">NOTAM à jour'+(fail?' (une source indisponible)':'')+'</span>') : '<span class="pill bad">Indisponible — réseau/proxy bloqué, réessayez</span>';
 }
 /* ---- MASSE & CENTRAGE ---- */
 let kpTarget=null;
