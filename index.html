@@ -239,6 +239,23 @@
   .navtbl tfoot td{font-weight:800;color:var(--ink);border-bottom:none;padding-top:8px;font-variant-numeric:tabular-nums;}
   .navtbl .lgx{background:var(--panel2);border:1px solid var(--line);border-radius:9px;min-width:40px;min-height:40px;font-size:18px;line-height:1;cursor:pointer;color:var(--ink);}
   .navtbl tr.legdet td{background:var(--panel2);}
+  .bmap-wrap{position:relative;width:100%;height:58vh;min-height:300px;max-height:640px;border-radius:18px;overflow:hidden;border:1px solid #cfd8e3;background:#e9eef3;margin:0 0 14px;touch-action:none;cursor:grab;}
+  .bmap-wrap:active{cursor:grabbing;}
+  .bmap-wrap.bmap-full{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-height:none;min-height:0;border-radius:0;border:0;z-index:9000;margin:0;}
+  .bmap-tiles{position:absolute;inset:0;will-change:transform;}
+  .bmap-tiles img{position:absolute;width:256px;height:256px;user-select:none;-webkit-user-drag:none;}
+  .bmap-ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .bmap-ctrl{position:absolute;right:9px;bottom:9px;display:flex;flex-direction:column;gap:7px;z-index:3;}
+  .bmap-ctrl button{width:40px;height:40px;border-radius:11px;border:1px solid #cfd8e3;background:rgba(255,255,255,.94);font-size:21px;font-weight:800;color:#234;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(20,40,70,.15);}
+  .bmap-ctrl button:active{transform:scale(.95);}
+  .bmap-info{position:absolute;left:9px;top:9px;background:rgba(255,255,255,.92);border:1px solid #cfd8e3;border-radius:10px;padding:5px 10px;font-size:13px;color:#16202b;z-index:3;font-variant-numeric:tabular-nums;pointer-events:none;}
+  .bmap-ctrl #bmRecenter{color:#2563eb;font-size:24px;}
+  .bmap-north{position:absolute;right:9px;top:9px;width:42px;height:42px;border-radius:50%;border:1px solid #cfd8e3;background:rgba(255,255,255,.94);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;padding:0;box-shadow:0 2px 6px rgba(20,40,70,.15);}
+  .bmap-north svg{transition:transform .25s ease;}
+  .bmap-north.on{background:#eaf2fd;border-color:#2f80b8;}
+  .bmap-north:active{transform:scale(.95);}
+  .bmap-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#5b6b85;background:rgba(233,238,243,.6);z-index:2;pointer-events:none;}
+  .bmap-attr{position:absolute;left:7px;bottom:6px;font-size:9px;color:#333;background:rgba(255,255,255,.82);padding:1px 6px;border-radius:5px;z-index:2;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -669,6 +686,15 @@ function renderHome(){
       <div>Position GPS<b id="homePos">${gpsLast?gpsLast.lat.toFixed(3)+', '+gpsLast.lon.toFixed(3):(gpsActive?'GPS…':'GPS off')}</b></div>
     </div>
   </div>
+  <div class="bmap-wrap" id="bmWrap">
+    <div class="bmap-tiles" id="bmTiles"></div>
+    <svg class="bmap-ovl" id="bmOvl" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="bmap-wait" id="bmWait">Chargement de la carte VFR…</div>
+    <button class="bmap-north" id="bmNorth" title="Nord en haut"><svg viewBox="0 0 30 30" width="26" height="26"><path d="M15 4 L19.5 16 L15 13 L10.5 16 Z" fill="#d23b3b"/><path d="M15 16 L19.5 16 L15 13 L10.5 16 Z" fill="#9aa7b6"/><text x="15" y="27" font-size="9" font-weight="800" text-anchor="middle" fill="#333">N</text></svg></button>
+    <div class="bmap-info" id="bmInfo">GPS…</div>
+    <div class="bmap-ctrl"><button id="bmRecenter" title="Recentrer sur l'avion" style="display:none">&#9678;</button><button id="bmFull" title="Plein écran"></button><button id="bmIn" title="Zoom avant">+</button><button id="bmOut" title="Zoom arrière">&#8722;</button></div>
+    <div class="bmap-attr">&copy; open-flightmaps.org · CC BY-NC-SA</div>
+  </div>
   <div class="card"><h2>Chronomètre</h2>
     <div class="phase-grid">
       <button class="phbtn ${state.chrono.offBlock?'set':''} ${!state.chrono.offBlock?'next':''}" id="phOff">Off-block<small>${hhmmUTC(state.chrono.offBlock)}</small></button>
@@ -701,6 +727,7 @@ function renderHome(){
   Object.keys(phm).forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=()=>chPhaseStamp(phm[id]); });
   const pu=document.getElementById("phUndo"); if(pu) pu.onclick=chPhaseUndo;
   updateHomeGps();
+  initBoardMap();
 }
 function renderSettings(){
   const r=computeWB(), p=P();
@@ -996,6 +1023,8 @@ function routeSVG(){
 }
 function _merX(lon,z){ return (lon+180)/360*256*Math.pow(2,z); }
 function _merY(lat,z){ const r=lat*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z); }
+function _invMerLon(px,z){ return px/(256*Math.pow(2,z))*360-180; }
+function _invMerLat(py,z){ const n=256*Math.pow(2,z); return Math.atan(Math.sinh(Math.PI*(1-2*py/n)))*180/Math.PI; }
 function _routePts(){
   const pts=[];
   const dep=lookupAirport((state.meteo.dep||'').toUpperCase());
@@ -1049,6 +1078,190 @@ function routeMap(){
     +'</div></div>';
 }
 function fitRouteMap(){ document.querySelectorAll('.rmap-wrap').forEach(w=>{ const m=w.querySelector('.rmap'); if(!m) return; const s=Math.min(1,(w.clientWidth||600)/600); m.style.transformOrigin='top left'; m.style.transform='scale('+s+')'; w.style.height=(380*s)+'px'; }); }
+
+/* ===== CARTE VFR MOBILE (page Bord) ===== source : open-flightmaps (carte aéronautique VFR libre) */
+const VFR_TILE='https://nwy-tiles-api.prod.newaydata.com/tiles/{z}/{x}/{y}.png?path=latest/aero/latest';
+const BM_TIMES=[1,2,5,10,15];                 // minutes des bulles d'estimation
+const AC_ICON='<path d="M0,-17 C2.2,-17 3.2,-13.5 3.2,-9 L3.2,-3 L15,4.5 L15,8.5 L3.2,4.5 L3.2,11 L7.5,14.5 L7.5,17.5 L0,15.4 L-7.5,17.5 L-7.5,14.5 L-3.2,11 L-3.2,4.5 L-15,8.5 L-15,4.5 L-3.2,-3 L-3.2,-9 C-3.2,-13.5 -2.2,-17 0,-17 Z" fill="#1d4ed8" stroke="#fff" stroke-width="1.6"/>';
+const BM_ICON_FULL='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#234" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+const BM_ICON_EXIT='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#234" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+let bmZoom=10;                                // niveau de zoom (7..13)
+let bmTrack=null;                            // dernière route sol connue (deg)
+let bmBuild=null;                            // {z,la,lo,W,H} centre du dernier rendu de tuiles
+let bmTrackUp=false;                          // false = Nord en haut · true = route en haut
+let bmRot=0;                                  // rotation appliquée au monde (deg) : 0 en Nord-up, -route en track-up
+let bmView=null;                              // centre de vue manuel {la,lo} si l'utilisateur a déplacé la carte ; null = suit l'avion
+let bmDrag=null, bmPinch=null, bmDesktopBound=false;   // états des gestes tactiles/souris
+function bmBearing(la1,lo1,la2,lo2){ const t=x=>x*Math.PI/180; const y=Math.sin(t(lo2-lo1))*Math.cos(t(la2)); const x=Math.cos(t(la1))*Math.sin(t(la2))-Math.sin(t(la1))*Math.cos(t(la2))*Math.cos(t(lo2-lo1)); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+function bmCenter(){
+  if(gpsLast && isFinite(gpsLast.lat)) return {la:gpsLast.lat, lo:gpsLast.lon, live:true};
+  const dep=lookupAirport((state.meteo.dep||'').toUpperCase()); if(dep) return {la:dep.la, lo:dep.lo, live:false};
+  const ad=P().aerodrome; if(ad&&isFinite(ad.lat)) return {la:ad.lat, lo:ad.lon, live:false};
+  return {la:46.6, lo:2.4, live:false};
+}
+function bmViewCenter(){ return bmView ? {la:bmView.la, lo:bmView.lo, live:false} : bmCenter(); }
+function bmTrackDeg(){
+  if(gpsLast && gpsLast.hdg!=null && isFinite(gpsLast.hdg) && (gpsLast.gs==null||gpsLast.gs>3)) return gpsLast.hdg;
+  const tr=state.track||[]; if(tr.length>=2){ const a=tr[tr.length-2], b=tr[tr.length-1]; if(distM(a.la,a.lo,b.la,b.lo)>15) return bmBearing(a.la,a.lo,b.la,b.lo); }
+  return bmTrack;
+}
+function bmGroundSpeed(){   // kt — vitesse GPS si dispo, sinon calculée depuis la trace
+  if(gpsLast && gpsLast.gs!=null && isFinite(gpsLast.gs)) return gpsLast.gs;
+  const tr=state.track||[]; if(tr.length>=2){ const a=tr[tr.length-2], b=tr[tr.length-1], dt=(b.t-a.t)/3600000;
+    if(dt>0){ const v=(distM(a.la,a.lo,b.la,b.lo)/1852)/dt; if(isFinite(v)&&v>=0&&v<600) return v; } }
+  return null;
+}
+function bmApplyTileTransform(dx,dy){ const layer=document.getElementById('bmTiles'); if(!layer) return;
+  layer.style.transformOrigin='50% 50%';
+  layer.style.transform='rotate('+bmRot.toFixed(1)+'deg) translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px)'; }
+function drawBoardTiles(){
+  const wrap=document.getElementById('bmWrap'), layer=document.getElementById('bmTiles'); if(!wrap||!layer) return;
+  const W=wrap.clientWidth, H=wrap.clientHeight; if(!W||!H) return;
+  const c=bmViewCenter(), z=bmZoom, pcx=_merX(c.lo,z), pcy=_merY(c.la,z), n=Math.pow(2,z);
+  const sX=pcx-W/2, sY=pcy-H/2;                       // pixel-monde au coin haut-gauche de l'écran
+  const m=200, hW=(bmRot?Math.sqrt(W*W+H*H)/2:W/2)+m, hH=(bmRot?Math.sqrt(W*W+H*H)/2:H/2)+m;  // marge + couverture rotation
+  const tx0=Math.floor((pcx-hW)/256), ty0=Math.floor((pcy-hH)/256), tx1=Math.floor((pcx+hW)/256), ty1=Math.floor((pcy+hH)/256);
+  let html='';
+  for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
+    if(ty<0||ty>=n) continue; const wx=((tx%n)+n)%n;
+    html+='<img src="'+VFR_TILE.replace('{z}',z).replace('{x}',wx).replace('{y}',ty)+'" style="left:'+(tx*256-sX).toFixed(0)+'px;top:'+(ty*256-sY).toFixed(0)+'px" draggable="false" alt="">';
+  }
+  layer.innerHTML=html; bmApplyTileTransform(0,0);
+  bmBuild={z:z, la:c.la, lo:c.lo, W:W, H:H, rot:bmRot?1:0};
+  const wait=document.getElementById('bmWait'); if(wait) wait.style.display='none';
+}
+function drawBoardOverlay(){
+  const wrap=document.getElementById('bmWrap'), svg=document.getElementById('bmOvl'); if(!wrap||!svg) return;
+  const W=wrap.clientWidth, H=wrap.clientHeight; if(!W||!H) return;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  const c=bmViewCenter(), ac=bmCenter(), cx=W/2, cy=H/2, trk=bmTrackDeg(); if(trk!=null) bmTrack=trk;
+  const gs=bmGroundSpeed();
+  const mpp=156543.03392*Math.cos(c.la*Math.PI/180)/Math.pow(2,bmZoom);   // mètres / pixel
+  // rotation du monde (track-up) : tourne chaque point autour du centre, mais le texte reste droit
+  const ca=Math.cos(bmRot*Math.PI/180), sa=Math.sin(bmRot*Math.PI/180);
+  const R=(x,y)=>bmRot?[cx+(x-cx)*ca-(y-cy)*sa, cy+(x-cx)*sa+(y-cy)*ca]:[x,y];
+  const PX=lo=>_merX(lo,bmZoom)-_merX(c.lo,bmZoom)+cx, PY=la=>_merY(la,bmZoom)-_merY(c.la,bmZoom)+cy;
+  const ac0x=PX(ac.lo), ac0y=PY(ac.la);          // position de l'avion à l'écran (avant rotation)
+  let s='';
+  // route prévue (dep → points → arr)
+  const rp=_routePts();
+  if(rp.length>=2){
+    const sp=rp.map(p=>{ const r=R(PX(p.lo),PY(p.la)); return {x:r[0],y:r[1],nm:p.nm,t:p.t}; });
+    const line=sp.map(q=>q.x.toFixed(1)+','+q.y.toFixed(1)).join(' ');
+    s+='<polyline points="'+line+'" fill="none" stroke="#fff" stroke-width="6" stroke-opacity=".8" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<polyline points="'+line+'" fill="none" stroke="#1d4ed8" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+    sp.forEach(q=>{ if(q.x<-20||q.x>W+20||q.y<-20||q.y>H+20) return;
+      const col=q.t==='dep'?'#2f80b8':(q.t==='arr'?'#1d4ed8':'#555'), rad=q.t==='wp'?4:6;
+      s+='<circle cx="'+q.x.toFixed(1)+'" cy="'+q.y.toFixed(1)+'" r="'+rad+'" fill="'+col+'" stroke="#fff" stroke-width="2"/>'
+        +'<text x="'+(q.x+9).toFixed(1)+'" y="'+(q.y-8).toFixed(1)+'" font-size="12" font-weight="800" fill="#13243a" stroke="#fff" stroke-width="3" paint-order="stroke">'+esc(q.nm)+'</text>'; });
+  }
+  // trace réelle déjà parcourue (passé)
+  let tk=(state.track||[]).filter(p=>isFinite(p.la)&&isFinite(p.lo));
+  if(tk.length>800){ const step=Math.ceil(tk.length/800); tk=tk.filter((p,i)=>i%step===0||i===0||i===state.track.length-1); }
+  if(tk.length>1){
+    const tline=tk.map(p=>{ const r=R(PX(p.lo),PY(p.la)); return r[0].toFixed(1)+','+r[1].toFixed(1); }).join(' ');
+    s+='<polyline points="'+tline+'" fill="none" stroke="#fff" stroke-width="6" stroke-opacity=".6" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<polyline points="'+tline+'" fill="none" stroke="#d23b3b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  if(trk!=null && gs!=null && gs>3){
+    const th=trk*Math.PI/180, ux=Math.sin(th), uy=-Math.cos(th);
+    const maxPx=gs*(BM_TIMES[BM_TIMES.length-1]/60)*1852/mpp, st=R(ac0x,ac0y), e=R(ac0x+ux*maxPx,ac0y+uy*maxPx);
+    s+='<line x1="'+st[0].toFixed(1)+'" y1="'+st[1].toFixed(1)+'" x2="'+e[0].toFixed(1)+'" y2="'+e[1].toFixed(1)+'" stroke="#fff" stroke-width="4" stroke-opacity=".7"/>'
+      +'<line x1="'+st[0].toFixed(1)+'" y1="'+st[1].toFixed(1)+'" x2="'+e[0].toFixed(1)+'" y2="'+e[1].toFixed(1)+'" stroke="#d23b3b" stroke-width="2.2" stroke-dasharray="1 5" stroke-linecap="round"/>';
+    BM_TIMES.forEach(t=>{ const px=gs*(t/60)*1852/mpp, b=R(ac0x+ux*px,ac0y+uy*px), bx=b[0], by=b[1];
+      if(bx<-50||bx>W+50||by<-50||by>H+50) return;
+      const w=(t>=10?30:24);
+      s+='<circle cx="'+bx.toFixed(1)+'" cy="'+by.toFixed(1)+'" r="4.5" fill="#d23b3b" stroke="#fff" stroke-width="1.5"/>'
+        +'<g transform="translate('+bx.toFixed(1)+','+by.toFixed(1)+')"><rect x="8" y="-10" width="'+w+'" height="18" rx="5" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
+        +'<text x="'+(8+w/2)+'" y="3" font-size="12" font-weight="800" text-anchor="middle" fill="#b3261e">'+t+"′</text></g>"; });
+  }
+  const acP=R(ac0x,ac0y), acRot=(trk!=null?trk:0)+bmRot;
+  s+='<g transform="translate('+acP[0].toFixed(1)+','+acP[1].toFixed(1)+') rotate('+acRot.toFixed(1)+')">'+AC_ICON+'</g>';
+  svg.innerHTML=s;
+  bmUpdateNorth();
+  const info=document.getElementById('bmInfo');
+  if(info){ const gsTxt=gs!=null?('<b>'+gs.toFixed(0)+'</b> kt'):'<b>--</b> kt';
+    const trkTxt=trk!=null?(String(Math.round(trk)%360).padStart(3,'0')+'°'):'---°';
+    info.innerHTML=gsTxt+' · route '+trkTxt+(ac.live?'':' · <span style="color:#b3261e">pos. estimée</span>'); }
+  const rc=document.getElementById('bmRecenter'); if(rc) rc.style.display=bmView?'flex':'none';
+}
+function updateBoardMap(){
+  if(currentTab!=='home') return;
+  const wrap=document.getElementById('bmWrap'); if(!wrap) return;
+  const W=wrap.clientWidth, H=wrap.clientHeight; if(!W||!H) return;
+  const z=bmZoom, c=bmViewCenter();
+  const trk=bmTrackDeg(); if(trk!=null) bmTrack=trk;
+  bmRot=(bmTrackUp && bmTrack!=null)?(-bmTrack):0;       // route en haut → on tourne le monde de -route
+  if(!bmBuild || bmBuild.z!==z || bmBuild.W!==W || bmBuild.H!==H || bmBuild.rot!==(bmRot?1:0)){ drawBoardTiles(); }
+  else { const dx=_merX(bmBuild.lo,z)-_merX(c.lo,z), dy=_merY(bmBuild.la,z)-_merY(c.la,z);
+    if(Math.abs(dx)>192||Math.abs(dy)>192) drawBoardTiles();
+    else bmApplyTileTransform(dx,dy); }
+  drawBoardOverlay();
+}
+function bmSetZoom(d){ bmZoom=Math.max(7,Math.min(13,bmZoom+d)); bmBuild=null; updateBoardMap(); }
+function bmToggleFull(){
+  const w=document.getElementById('bmWrap'); if(!w) return;
+  const full=w.classList.toggle('bmap-full');
+  const b=document.getElementById('bmFull'); if(b) b.innerHTML=full?BM_ICON_EXIT:BM_ICON_FULL;
+  bmBuild=null; requestAnimationFrame(updateBoardMap);
+}
+function bmToggleTrackUp(){ bmTrackUp=!bmTrackUp; bmBuild=null; updateBoardMap(); }
+function bmRecenter(){ bmView=null; bmBuild=null; updateBoardMap(); }
+function bmPanTo(start,dxp,dyp){            // déplace le centre de vue selon un glissement écran (dxp,dyp px)
+  if(start.z!==bmZoom) return;
+  const a=-bmRot*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);   // dé-rotation écran → monde
+  const wdx=dxp*ca-dyp*sa, wdy=dxp*sa+dyp*ca, z=bmZoom;
+  const pcx=_merX(start.vc.lo,z)-wdx, pcy=_merY(start.vc.la,z)-wdy;
+  bmView={la:_invMerLat(pcy,z), lo:_invMerLon(pcx,z)};
+  updateBoardMap();
+}
+function bmBindGestures(wrap){
+  // ---- tactile : 1 doigt = déplacement · 2 doigts = pinch-to-zoom ----
+  wrap.addEventListener('touchstart',e=>{
+    if(e.target.closest('button')) return;
+    if(e.touches.length===1){ bmPinch=null; const t=e.touches[0]; bmDrag={x:t.clientX,y:t.clientY,vc:bmViewCenter(),z:bmZoom}; }
+    else if(e.touches.length===2){ bmDrag=null; const a=e.touches[0],b=e.touches[1]; bmPinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),r:1}; }
+  },{passive:false});
+  wrap.addEventListener('touchmove',e=>{
+    if(bmPinch && e.touches.length===2){ e.preventDefault();
+      const a=e.touches[0],b=e.touches[1], r=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/bmPinch.d; bmPinch.r=r;
+      const layer=document.getElementById('bmTiles'), ov=document.getElementById('bmOvl');
+      if(layer){ layer.style.transformOrigin='50% 50%'; layer.style.transform='rotate('+bmRot.toFixed(1)+'deg) scale('+r.toFixed(3)+')'; }
+      if(ov){ ov.style.transformOrigin='50% 50%'; ov.style.transform='scale('+r.toFixed(3)+')'; }
+    } else if(bmDrag && e.touches.length===1){ e.preventDefault(); const t=e.touches[0]; bmPanTo(bmDrag,t.clientX-bmDrag.x,t.clientY-bmDrag.y); }
+  },{passive:false});
+  wrap.addEventListener('touchend',e=>{
+    if(bmPinch){ const r=bmPinch.r||1, ov=document.getElementById('bmOvl'); if(ov) ov.style.transform='';
+      if(Math.abs(Math.log2(r))>0.18){ if(!bmView) bmView={la:bmCenter().la,lo:bmCenter().lo}; bmZoom=Math.max(7,Math.min(13,bmZoom+Math.round(Math.log2(r)))); }
+      bmPinch=null; bmBuild=null; updateBoardMap(); }
+    if(e.touches.length===0) bmDrag=null;
+  },{passive:false});
+  // ---- souris (bureau) : glisser pour déplacer · molette pour zoomer ----
+  wrap.addEventListener('mousedown',e=>{ if(e.target.closest('button')) return; bmDrag={x:e.clientX,y:e.clientY,vc:bmViewCenter(),z:bmZoom}; e.preventDefault(); });
+  wrap.addEventListener('wheel',e=>{ e.preventDefault(); if(!bmView) bmView={la:bmCenter().la,lo:bmCenter().lo}; bmSetZoom(e.deltaY<0?1:-1); },{passive:false});
+  if(!bmDesktopBound){ bmDesktopBound=true;
+    window.addEventListener('mousemove',e=>{ if(bmDrag&&!bmPinch) bmPanTo(bmDrag,e.clientX-bmDrag.x,e.clientY-bmDrag.y); });
+    window.addEventListener('mouseup',()=>{ bmDrag=null; });
+  }
+}
+function bmUpdateNorth(){
+  const n=document.getElementById('bmNorth'); if(!n) return;
+  const g=n.firstElementChild; if(g) g.style.transform='rotate('+bmRot.toFixed(1)+'deg)';
+  n.classList.toggle('on',bmTrackUp);
+  n.title=bmTrackUp?'Route en haut (cliquer pour Nord en haut)':'Nord en haut (cliquer pour route en haut)';
+}
+function initBoardMap(){
+  const wrap=document.getElementById('bmWrap');
+  const ib=document.getElementById('bmIn'), ob=document.getElementById('bmOut'), fb=document.getElementById('bmFull'), nb=document.getElementById('bmNorth'), rc=document.getElementById('bmRecenter');
+  if(ib) ib.onclick=()=>bmSetZoom(1);
+  if(ob) ob.onclick=()=>bmSetZoom(-1);
+  if(fb){ fb.innerHTML=BM_ICON_FULL; fb.onclick=bmToggleFull; }
+  if(nb) nb.onclick=bmToggleTrackUp;
+  if(rc) rc.onclick=bmRecenter;
+  if(wrap) bmBindGestures(wrap);
+  bmBuild=null;
+  requestAnimationFrame(updateBoardMap);
+}
 function envelopeSVG(r){
   const ax=P().wb.envelopeAxis,poly=P().wb.envelope,W=320,H=240,pad=38;
   const sx=a=>pad+(a-ax.armMin)/(ax.armMax-ax.armMin)*(W-pad-10);
@@ -1379,7 +1592,7 @@ function onGPS(pos){
     if(gsEl) gsEl.textContent=gsKt!=null?gsKt.toFixed(0)+" kt":"n/d";
     if(posEl) posEl.textContent=c.latitude.toFixed(4)+", "+c.longitude.toFixed(4);
   }
-  if(currentTab==='home') updateHomeGps();
+  if(currentTab==='home'){ updateHomeGps(); updateBoardMap(); }
   if(currentTab==='nav') updateNavGps();
   evalTriggers();
 }
@@ -1748,8 +1961,9 @@ render();
 updateChronoChip();
 updateFuelPopup();
 if(!state.settings || state.settings.gpsAuto!==false){ try{ startGPS(); }catch(e){} }
-function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home'){ updateHomeGps(); updateHomeChrono(); } }
+function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home'){ updateHomeGps(); updateHomeChrono(); updateBoardMap(); } }
 setInterval(appTick,1000);
+window.addEventListener('resize',()=>{ if(currentTab==='home') updateBoardMap(); });
 window.addEventListener("orientationchange",()=>setTimeout(render,250));
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ updateChronoChip(); fuelTick(); updateFuelPopup(); if((!state.settings||state.settings.gpsAuto!==false)&&!gpsActive){ try{ startGPS(); }catch(e){} } reqWake(); } });
 </script>
