@@ -242,6 +242,9 @@
   .bmap-wrap{position:relative;width:100%;height:58vh;min-height:300px;max-height:640px;border-radius:18px;overflow:hidden;border:1px solid #cfd8e3;background:#e9eef3;margin:0 0 14px;touch-action:none;cursor:grab;}
   .bmap-wrap:active{cursor:grabbing;}
   .bmap-wrap.bmap-full{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-height:none;min-height:0;border-radius:0;border:0;z-index:9000;margin:0;}
+  body.bm-full #nav{display:none;}
+  .bmap-full .bmap-ctrl{bottom:calc(9px + env(safe-area-inset-bottom,0px));}
+  .bmap-full .bmap-attr{bottom:calc(6px + env(safe-area-inset-bottom,0px));}
   .bmap-tiles{position:absolute;inset:0;will-change:transform;}
   .bmap-tiles img{position:absolute;width:256px;height:256px;user-select:none;-webkit-user-drag:none;}
   .bmap-ovl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
@@ -829,7 +832,6 @@ function renderProfil(){
       <button class="btn accent" id="vacDepBtn">&#8595; VAC départ</button>
       <button class="btn accent" id="vacArrBtn">&#8595; VAC arrivée</button>
     </div>
-    <div class="kv" style="margin-top:8px"><span class="k">Phase</span><span class="v">${inFlight()?'EN VOL — carte d\'approche':'AU SOL — plan d\'aérodrome'}</span></div>
     <div id="vacStatus" class="note" style="margin-top:8px"></div>
     <div class="note" style="margin-top:6px">La VAC officielle contient le plan d'aérodrome (sol) et la carte d'approche à vue (aérodromes définis dans « Route » ci-dessus). Source : SIA — Licence Ouverte. La météo détaillée est dans l'onglet <b>Météo</b>.</div></div>`;
   bindInput("depIcao",v=>state.meteo.dep=v.toUpperCase());
@@ -1202,6 +1204,7 @@ function bmSetZoom(d){ bmZoom=Math.max(7,Math.min(13,bmZoom+d)); bmBuild=null; u
 function bmToggleFull(){
   const w=document.getElementById('bmWrap'); if(!w) return;
   const full=w.classList.toggle('bmap-full');
+  document.body.classList.toggle('bm-full',full);   // masque la barre d'onglets en plein écran uniquement
   const b=document.getElementById('bmFull'); if(b) b.innerHTML=full?BM_ICON_EXIT:BM_ICON_FULL;
   bmBuild=null; requestAnimationFrame(updateBoardMap);
 }
@@ -1251,6 +1254,7 @@ function bmUpdateNorth(){
   n.title=bmTrackUp?'Route en haut (cliquer pour Nord en haut)':'Nord en haut (cliquer pour route en haut)';
 }
 function initBoardMap(){
+  document.body.classList.remove('bm-full');   // la carte fraîchement rendue n'est jamais en plein écran
   const wrap=document.getElementById('bmWrap');
   const ib=document.getElementById('bmIn'), ob=document.getElementById('bmOut'), fb=document.getElementById('bmFull'), nb=document.getElementById('bmNorth'), rc=document.getElementById('bmRecenter');
   if(ib) ib.onclick=()=>bmSetZoom(1);
@@ -1697,7 +1701,6 @@ function vacCard(defIcao){
   return '<div class="card"><h2>Carte VAC</h2>'
     +'<label class="fld">A\u00e9rodrome (OACI)<input id="vacIcao" value="'+esc(defIcao||'')+'" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="LFPA"></label>'
     +'<div class="row" style="margin-top:8px"><button class="btn accent" id="vacOpen">Afficher la VAC</button><button class="btn ghost" id="vacDl">T\u00e9l\u00e9charger hors-ligne</button></div>'
-    +'<div class="kv" style="margin-top:8px"><span class="k">Phase</span><span class="v">'+(inFlight()?'EN VOL — carte d\'approche':'AU SOL — plan d\'aérodrome')+'</span></div>'
     +'<div id="vacStatus" class="note" style="margin-top:8px"></div>'
     +'<div class="note" style="margin-top:6px">La VAC officielle contient le plan d\'a\u00e9rodrome (sol) et la carte d\'approche \u00e0 vue. Source : SIA \u2014 cycle '+folder+' \u00b7 Licence Ouverte.</div></div>';
 }
