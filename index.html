@@ -552,6 +552,7 @@ function num(v,d){ const n=parseFloat(v); return isFinite(n)?n:(d!==undefined?d:
 
 /* ===== ROUTAGE ===== */
 let currentTab="home";
+let perfSubManual=null;   // surcharge manuelle de l'onglet Perfo (sinon : Décollage avant le top décollage, Atterrissage après)
 const main=document.getElementById("main");
 document.querySelectorAll("#nav button").forEach(b=>{
   b.addEventListener("click",()=>{
@@ -1339,6 +1340,7 @@ function chPhaseStamp(field){ const c=state.chrono;
   else if(field==='takeOff'){ if(!c.offBlock||c.takeOff) return; c.takeOff=Date.now(); }
   else if(field==='landing'){ if(!c.takeOff||c.landing) return; c.landing=Date.now(); }
   else if(field==='onBlock'){ if(!c.landing||c.onBlock) return; c.onBlock=Date.now(); applyBlockToCompteur(); stopFuelMgmt(); relWake(); }
+  perfSubManual=null;   // Perfo réaligne sur la phase (Décollage → Atterrissage au top décollage)
   saveState(); render(); updateChronoChip(); updateFuelPopup();
 }
 function chPhaseUndo(){
@@ -1352,9 +1354,10 @@ function chPhaseUndo(){
   } else if(f==='offBlock'){ /* annule le départ : stoppe carburant + trace GPS */
     stopFuelMgmt(); state.track=[]; relWake();
   }
+  perfSubManual=null;
   saveState(); render(); updateChronoChip(); updateFuelPopup();
 }
-function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; state.fuelMgmt.active=false; state.track=[]; saveState(); render(); updateChronoChip(); updateFuelPopup(); }
+function chronoReset(){ state.chrono={offBlock:null,takeOff:null,landing:null,onBlock:null}; state.fuelMgmt.lastChronoMs=0; state.fuelMgmt.active=false; state.track=[]; perfSubManual=null; saveState(); render(); updateChronoChip(); updateFuelPopup(); }
 function fmtHMS(ms){ ms=Math.max(0,ms|0); let s=Math.floor(ms/1000),h=Math.floor(s/3600); s-=h*3600; let m=Math.floor(s/60); s-=m*60; const p=n=>String(n).padStart(2,'0'); return (h>0?h+':'+p(m):m)+':'+p(s); }
 function updateChronoChip(){ const fl=inFlight(); const ms=fl?chAirMs():chBlockMs(); const el=document.getElementById('chrono'); if(el){ el.textContent=(fl?'\u25B2 ':'\u23F1 ')+fmtHMS(ms); el.classList.toggle('run', chronoRunning()||fl); } const b=document.getElementById('wbBlock'); if(b) b.textContent=fmtHMS(chBlockMs()); const a=document.getElementById('wbAir'); if(a) a.textContent=fmtHMS(chAirMs()); const pb=document.getElementById('phaseBadge'); if(pb){ pb.textContent=fl?'EN VOL':'AU SOL'; pb.className='phase-badge '+(fl?'vol':'sol'); } }
 
@@ -1430,7 +1433,7 @@ function renderPerf(){
       <p class="note" style="margin-top:14px">Corrigez la masse &amp; centrage pour déverrouiller les performances.</p></div></div>`; return;
   }
   normPerf();
-  const r=computePerf(), p=P(), sub=(state.perf.sub==='ldg')?'ldg':'to';
+  const r=computePerf(), p=P(), sub=perfSubManual||(state.chrono.takeOff?'ldg':'to');
   const speedsTO=`<div class="card"><h2>Vitesses décollage / montée</h2>
     <div class="kv"><span class="k">Vr (rotation)</span><span class="v">${r.speeds.vr} kt</span></div>
     <div class="kv"><span class="k">Vx (pente max)</span><span class="v">${r.speeds.vx} kt</span></div>
@@ -1447,10 +1450,24 @@ function renderPerf(){
   document.getElementById("modeEstim").onclick=()=>{state.perf.mode='estim';saveState();renderPerf();};
   document.getElementById("modeManuel").onclick=()=>{state.perf.mode='manuel';saveState();renderPerf();};
   document.getElementById("perfSync").onclick=()=>{ state.perf.to.icao=((state.meteo.dep||'')+'').toUpperCase(); state.perf.ldg.icao=((state.meteo.arr||'')+'').toUpperCase(); saveState(); renderPerf(); };
-  document.getElementById("subTO").onclick=()=>{ state.perf.sub='to'; saveState(); renderPerf(); };
-  document.getElementById("subLDG").onclick=()=>{ state.perf.sub='ldg'; saveState(); renderPerf(); };
+  document.getElementById("subTO").onclick=()=>{ perfSubManual='to'; renderPerf(); };
+  document.getElementById("subLDG").onclick=()=>{ perfSubManual='ldg'; renderPerf(); };
   bindPhase(sub);
   updatePerf();
+}
+function landingFuelBurnL(){   // litres prévus consommés jusqu'à l'atterrissage (GS 105 kt, 35 L/h)
+  const RATE=35, GS=105;
+  const arr=lookupAirport((state.meteo.arr||'').toUpperCase());
+  let remNM;
+  if(inFlight() && gpsLast && arr){ remNM=_hav(gpsLast.lat,gpsLast.lon,arr.la,arr.lo)/1.852; }
+  else { const nl=state.navlog||[]; let d=nl.reduce((s,L)=>s+(parseFloat(L.dist)||0),0); const ac=computeArrLeg(); if(ac) d+=parseFloat(ac.dist)||0; remNM=d; }
+  const remH=(isFinite(remNM)?remNM:0)/GS;
+  const elapsedH=inFlight()?Math.max(0,(Date.now()-state.chrono.takeOff)/3600000):0;
+  return (elapsedH+remH)*RATE;
+}
+function predLandingMass(){    // masse à l'atterrissage prévue = masse décollage − carburant consommé
+  const r=computeWB();
+  return Math.max(r.zfMass, r.mass - landingFuelBurnL()*P().fuelDensity);
 }
 function condCard(kind){
   const isTO=kind==='to';
@@ -1466,7 +1483,9 @@ function condCard(kind){
     <div class="kv"><span class="k">OAT / QNH</span><span class="v">${oat} °C / ${qnh} hPa</span></div>
     <div class="kv"><span class="k">Vent</span><span class="v">${wdir} / ${wspd}</span></div>
     <div class="kv"><span class="k">Source météo</span><span class="v"><span class="muted" style="font-weight:600">${src}</span></span></div>
-    <div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>
+    ${isTO?`<div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>`
+      :`<div class="kv"><span class="k">Masse à l'atterrissage (prévue)</span><span class="v" id="perfLandMass">${fmt(predLandingMass())} kg</span></div>
+        <div class="note" style="margin-top:2px">Estimée : GS moyenne 105 kt · conso 35 L/h · mise à jour en temps réel.</div>`}
     <div class="row" style="margin-top:10px">
       <button class="btn ${state.perf.mode==='estim'?'accent':'ghost'}" id="modeEstim">Pré-estimation</button>
       <button class="btn ${state.perf.mode==='manuel'?'accent':'ghost'}" id="modeManuel">Saisie abaque</button>
@@ -1722,8 +1741,8 @@ function renderNav(){
   const totDist=nl.reduce((s,L)=>s+(parseFloat(L.dist)||0),0)+(arrCalc?parseFloat(arrCalc.dist):0);
   const totTime=nl.reduce((s,L)=>s+(parseFloat(L.time)||0),0);
   const fixSty='style="background:rgba(47,128,184,.08)"';
-  const depRow=dep?`<tr ${fixSty}><td class="nr">D</td><td><b>${esc(dep)}</b> <small style="opacity:.7">départ${depPt?' — '+esc(depPt.n):''}</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td></td></tr>`:'';
-  const arrRow=arr?`<tr ${fixSty}><td class="nr">A</td><td><b>${esc(arr)}</b> <small style="opacity:.7">arrivée${arrPt?' — '+esc(arrPt.n):''}</small></td><td>${arrCalc?arrCalc.cap+'°':'—'}</td><td>—</td><td>${arrCalc?arrCalc.dist:'—'}</td><td>—</td><td></td></tr>`:'';
+  const depRow=dep?`<tr ${fixSty}><td class="nr">D</td><td><b>${esc(dep)}</b> <small style="opacity:.7">départ${depPt?' — '+esc(depPt.n):''}</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td><input id="depRmq" value="${esc(state.meteo.depRmq||'')}" placeholder="fréq…" style="min-width:90px"></td><td></td></tr>`:'';
+  const arrRow=arr?`<tr ${fixSty}><td class="nr">A</td><td><b>${esc(arr)}</b> <small style="opacity:.7">arrivée${arrPt?' — '+esc(arrPt.n):''}</small></td><td>${arrCalc?arrCalc.cap+'°':'—'}</td><td>—</td><td>${arrCalc?arrCalc.dist:'—'}</td><td><span class="eta" id="legtimeArr" style="font-weight:700">—</span></td><td><span class="eta" id="etaArr" style="font-weight:800;color:var(--accent)">—</span></td><td><input id="arrRmq" value="${esc(state.meteo.arrRmq||'')}" placeholder="fréq…" style="min-width:90px"></td><td></td></tr>`:'';
   const hasAny=dep||arr||nl.length;
   main.innerHTML=`
   <div class="eyebrow">Navigation</div>
@@ -1731,12 +1750,12 @@ function renderNav(){
     <div class="kv"><span class="k">Route</span><span class="v">${esc(dep||'—')} → ${esc(arr||'—')}</span></div></div>
   <div class="card"><h2>Branches</h2>
     ${hasAny?`<div class="navtbl-wrap"><table class="navtbl">
-      <thead><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Tps</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Point</th><th>Cap</th><th>Alt</th><th>Dist</th><th>Tps</th><th>ETA</th><th>Rmq</th><th></th></tr></thead>
       <tbody>${depRow}${legs}${arrRow}</tbody>
-      <tfoot><tr><td></td><td>Total</td><td></td><td></td><td>${totDist?totDist.toFixed(0):'—'}</td><td>${totTime?totTime.toFixed(0):'—'}</td><td></td></tr></tfoot>
+      <tfoot><tr><td></td><td>Total</td><td></td><td></td><td>${totDist?totDist.toFixed(0):'—'}</td><td><span id="totTimeEst">—</span></td><td></td><td></td><td></td></tr></tfoot>
     </table></div>`:'<div class="note">Renseignez le départ et l\'arrivée dans l\'onglet Vol — ils apparaîtront ici automatiquement.</div>'}
     <button class="btn primary" id="addLeg" style="margin-top:12px">+ Ajouter un point intermédiaire</button>
-    <div class="note" style="margin-top:8px">Les terrains de <b>départ (D)</b> et d'<b>arrivée (A)</b> sont inclus d'office d'après l'onglet Vol. Ajoutez les points intermédiaires entre eux. Touchez &#8943; pour les coordonnées GPS, observations et la suppression. Un code OACI dans « Point » remplit les coordonnées. Le <b>cap (route vraie)</b> et la <b>distance</b> sont calculés automatiquement entre points géoréférencés — à corriger de la déclinaison et du vent.</div></div>
+    <div class="note" style="margin-top:8px">Les terrains de <b>départ (D)</b> et d'<b>arrivée (A)</b> sont inclus d'office d'après l'onglet Vol. Ajoutez les points intermédiaires entre eux. Touchez &#8943; pour les coordonnées GPS et la suppression. La colonne <b>Rmq</b> permet de noter une fréquence ou une remarque. Un code OACI dans « Point » remplit les coordonnées. Le <b>cap (route vraie)</b> et la <b>distance</b> sont calculés automatiquement entre points géoréférencés — à corriger de la déclinaison et du vent.</div></div>
   <div class="card"><h2>Compteur horamètre</h2>
     <div class="row">
       <label class="fld">Compteur entrée<input id="cptEntree" inputmode="decimal" value="${esc(state.compteur.entree)}" placeholder="1000.00"></label>
@@ -1758,6 +1777,8 @@ function renderNav(){
   ${vacCard(state.meteo.dep)}`;
   updateFuelMgmtDisplay();
   document.getElementById("addLeg").onclick=()=>{ state.navlog.push({wpt:"",cap:"",alt:"",dist:"",time:"",obs:"",lat:"",lon:""}); navTriggered={}; saveState(); renderNav(); };
+  const dr=document.getElementById("depRmq"); if(dr) dr.addEventListener('input',()=>{ state.meteo.depRmq=dr.value; saveState(); });
+  const ar=document.getElementById("arrRmq"); if(ar) ar.addEventListener('input',()=>{ state.meteo.arrRmq=ar.value; saveState(); });
   nl.forEach((L,i)=>{ ['wpt','cap','alt','dist','time','obs','lat','lon'].forEach(f=>bindLeg(i,f));
     const del=document.getElementById('legDel'+i); if(del) del.onclick=()=>{ state.navlog.splice(i,1); navTriggered={}; saveState(); renderNav(); };
     const more=document.getElementById('legMore'+i); if(more) more.onclick=()=>{ const d=document.getElementById('legDet'+i); if(d) d.classList.toggle('hide'); }; });
@@ -1765,6 +1786,7 @@ function renderNav(){
   const cs=document.getElementById("cptSortie"); if(cs){ bindInput("cptSortie",v=>state.compteur.sortie=v,false); cs.addEventListener('input',updCpt); }
   updCpt();
   updateNavGps();
+  updateNavEta();
   bindVac();
 }
 function bearingDeg(a,b){ const r=Math.PI/180, p1=a.la*r, p2=b.la*r, dl=(b.lo-a.lo)*r; const y=Math.sin(dl)*Math.cos(p2); const x=Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
@@ -1789,14 +1811,15 @@ function legRow(L,i){
     <td>${capI}</td>
     <td><input id="leg${i}alt" class="nnum" inputmode="numeric" value="${esc(L.alt)}"></td>
     <td>${distI}</td>
-    <td><input id="leg${i}time" class="nnum" inputmode="decimal" value="${esc(L.time)}"></td>
+    <td><span class="eta" id="legtime${i}" style="font-weight:700">—</span></td>
+    <td><span class="eta" id="eta${i}" style="font-weight:800;color:var(--accent)">—</span></td>
+    <td><input id="leg${i}obs" value="${esc(L.obs)}" placeholder="fréq…" style="min-width:90px"></td>
     <td><button class="lgx" id="legMore${i}" title="Détails">&#8943;</button></td>
   </tr>
-  <tr class="legdet hide" id="legDet${i}"><td></td><td colspan="6">
+  <tr class="legdet hide" id="legDet${i}"><td></td><td colspan="8">
     <div class="grid">
       <label>Lat<input id="leg${i}lat" inputmode="decimal" value="${esc(L.lat)}" placeholder="49.16"></label>
       <label>Lon<input id="leg${i}lon" inputmode="decimal" value="${esc(L.lon)}" placeholder="2.31"></label>
-      <label class="span2">Observations<input id="leg${i}obs" value="${esc(L.obs)}" placeholder="fréquence, points, remarques"></label>
     </div>
     <button class="btn danger" id="legDel${i}" style="margin-top:8px;min-height:40px">Supprimer la branche ${i+1}</button>
   </td></tr>`;
@@ -1964,7 +1987,22 @@ render();
 updateChronoChip();
 updateFuelPopup();
 if(!state.settings || state.settings.gpsAuto!==false){ try{ startGPS(); }catch(e){} }
-function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav') updateNavGps(); else if(currentTab==='home'){ updateHomeGps(); updateHomeChrono(); updateBoardMap(); } }
+function updatePerfLanding(){ if(currentTab!=='perf') return; const el=document.getElementById('perfLandMass'); if(el) el.textContent=fmt(predLandingMass())+' kg'; }
+function navEtaGs(){ return (inFlight() && gpsLast && gpsLast.gs!=null && gpsLast.gs>20) ? gpsLast.gs : 105; }
+function fmtMin(m){ m=Math.round(m); if(m<60) return m+' min'; const h=Math.floor(m/60), mm=m%60; return h+' h '+(mm<10?'0':'')+mm; }
+function updateNavEta(){
+  if(currentTab!=='nav') return;
+  const nl=state.navlog||[], gs=navEtaGs(), base=inFlight()?(state.chrono.takeOff||Date.now()):Date.now();
+  let cum=0, cumT=0;
+  for(let i=0;i<nl.length;i++){ const d=parseFloat(nl[i].dist)||0, tmin=d/gs*60; cum+=d; cumT+=tmin;
+    const lt=document.getElementById('legtime'+i); if(lt) lt.textContent=d>0?fmtMin(tmin):'—';
+    const el=document.getElementById('eta'+i); if(el) el.textContent=(d>0||i>0)?hhmmUTC(base+cum/gs*3600000):'—'; }
+  const ac=computeArrLeg(), arrD=ac?(parseFloat(ac.dist)||0):0; if(arrD){ cum+=arrD; cumT+=arrD/gs*60; }
+  const lta=document.getElementById('legtimeArr'); if(lta) lta.textContent=arrD>0?fmtMin(arrD/gs*60):'—';
+  const ea=document.getElementById('etaArr'); if(ea) ea.textContent=cum>0?hhmmUTC(base+cum/gs*3600000):'—';
+  const tt=document.getElementById('totTimeEst'); if(tt) tt.textContent=cumT>0?fmtMin(cumT):'—';
+}
+function appTick(){ updateChronoChip(); fuelTick(); updateFuelPopup(); if(currentTab==='nav'){ updateNavGps(); updateNavEta(); } else if(currentTab==='home'){ updateHomeGps(); updateHomeChrono(); updateBoardMap(); } else if(currentTab==='perf'){ updatePerfLanding(); } }
 setInterval(appTick,1000);
 window.addEventListener('resize',()=>{ if(currentTab==='home') updateBoardMap(); });
 window.addEventListener("orientationchange",()=>setTimeout(render,250));
