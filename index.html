@@ -535,7 +535,7 @@ const LS_KEY="envol_efb_state_v2";
 function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
-    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[], depM:null, arrM:null, corridor:[], depCond:null, arrCond:null },
+    meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[], depM:null, arrM:null, corridor:[], depCond:null, arrCond:null, depCondIcao:"", arrCondIcao:"", depCondSub:false, arrCondSub:false, depCondDist:null, arrCondDist:null },
     wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
     perf:{ mode:"estim", to:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""}, ldg:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""} },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
@@ -859,6 +859,15 @@ function gcBearR(a,b){ const y=Math.sin(_tr(b.lo-a.lo))*Math.cos(_tr(b.la)); con
 function crossTrackNM(a,b,p){ const d13=gcDistNM(a,p)/R_NM,b13=gcBearR(a,p),b12=gcBearR(a,b); const xt=Math.asin(Math.sin(d13)*Math.sin(b13-b12)); const at=Math.acos(Math.cos(d13)/Math.cos(xt))*R_NM; return {xt:Math.abs(xt)*R_NM,at}; }
 async function metarFull(ids){ const t=await wxText("https://aviationweather.gov/api/data/metar?ids="+encodeURIComponent(ids)+"&format=json&taf=true"); if(!t)return[]; try{const j=JSON.parse(t);return Array.isArray(j)?j:[];}catch(e){return[];} }
 async function metarBbox(bbox){ const t=await wxText("https://aviationweather.gov/api/data/metar?bbox="+bbox+"&format=json"); if(!t)return[]; try{const j=JSON.parse(t);return Array.isArray(j)?j:[];}catch(e){return[];} }
+async function nearestMetar(icao){   // station METAR la plus proche d'un terrain donné (terrains sans METAR)
+  const a=lookupAirport(icao); if(!a||a.la==null) return null;
+  const pad=1.6;
+  const box=await metarBbox([a.la-pad,a.lo-pad,a.la+pad,a.lo+pad].join(","));
+  let best=null,bd=1e9;
+  box.forEach(x=>{ if(x.lat==null||!x.rawOb) return; const d=gcDistNM({la:a.la,lo:a.lo},{la:x.lat,lo:x.lon}); if(d<bd){bd=d;best=x;} });
+  if(best) best._distNM=bd;
+  return best;
+}
 function flCat(m){ if(!m) return ["—","#6b7480"]; const c=(m.clouds||[]).filter(x=>/BKN|OVC|VV/.test(x.cover||'')).map(x=>x.base).filter(x=>x!=null); const ceil=c.length?Math.min.apply(null,c):9999; let v=m.visib; v=(typeof v==="string")?(v.indexOf("+")>=0?10:parseFloat(v)):v; if(v==null)v=10;
   if(ceil<500||v<1) return ["LIFR","#a21caf"]; if(ceil<1000||v<3) return ["IFR","#d23b3b"]; if(ceil<3000||v<5) return ["MVFR","#b7791f"]; return ["VFR","#0e9d63"]; }
 function condFrom(m){ if(!m)return null; return { windDir:(m.wdir==='VRB'||m.wdir==null)?'':m.wdir, windSpd:m.wspd!=null?m.wspd:'', temp:m.temp!=null?Math.round(m.temp):'', qnh:m.altim!=null?Math.round(m.altim):'' }; }
@@ -916,9 +925,13 @@ async function loadMeteo(){
       box.forEach(x=>{ if(x.lat==null||seen[x.icaoId])return; const ct=crossTrackNM({la:A.la,lo:A.lo},{la:B.la,lo:B.lo},{la:x.lat,lo:x.lon}); if(ct.xt<=50&&ct.at>=-5&&ct.at<=route+5){ x._at=ct.at;x._xt=ct.xt;cor.push(x);seen[x.icaoId]=1; } });
       cor.sort((a,b)=>a._at-b._at); cor=cor.slice(0,14); }
     state.meteo.corridor=cor;
-    /* alimente les performances : météo départ → décollage, arrivée → atterrissage */
-    state.meteo.depCond=condFrom(state.meteo.depM); state.meteo.arrCond=condFrom(state.meteo.arrM);
-    if(state.meteo.depM){ applyMetar(parseMetar(state.meteo.depM.rawOb||'')); state.meteo.rawDep=state.meteo.depM.rawOb; state.meteo.tafDep=state.meteo.depM.rawTaf||''; }
+    /* alimente les performances : METAR du terrain, sinon le METAR le plus proche disponible */
+    const epCond=async(icao,ownM)=>{ if(ownM) return {m:ownM,icao:icao,dist:0,sub:false}; if(icao){ const n=await nearestMetar(icao); if(n) return {m:n,icao:(n.icaoId||'').toUpperCase(),dist:n._distNM,sub:true}; } return null; };
+    const dc=await epCond(dep,state.meteo.depM), ac=await epCond(arr,state.meteo.arrM);
+    state.meteo.depCond=dc?condFrom(dc.m):null; state.meteo.depCondIcao=dc?dc.icao:''; state.meteo.depCondSub=!!(dc&&dc.sub); state.meteo.depCondDist=dc?Math.round(dc.dist):null;
+    state.meteo.arrCond=ac?condFrom(ac.m):null; state.meteo.arrCondIcao=ac?ac.icao:''; state.meteo.arrCondSub=!!(ac&&ac.sub); state.meteo.arrCondDist=ac?Math.round(ac.dist):null;
+    if(dc) applyMetar(parseMetar(dc.m.rawOb||''));
+    if(state.meteo.depM){ state.meteo.rawDep=state.meteo.depM.rawOb; state.meteo.tafDep=state.meteo.depM.rawTaf||''; }
     if(state.meteo.arrM){ state.meteo.rawArr=state.meteo.arrM.rawOb; state.meteo.tafArr=state.meteo.arrM.rawTaf||''; }
     if(dep) state.perf.to.icao=dep; if(arr) state.perf.ldg.icao=arr;
     saveState();
@@ -1537,12 +1550,16 @@ function condCard(kind){
   const oat=Math.round(num(cond.temp,isaTempC(0))), qnh=Math.round(num(cond.qnh,1013));
   const wdir=(cond.windDir===''||cond.windDir==null)?'VRB':(cond.windDir+'°');
   const wspd=(cond.windSpd===''||cond.windSpd==null)?'—':(cond.windSpd+' kt');
-  const src=hasMetar&&icao?('METAR '+icao):'onglet Météo';
+  const condIcao=((isTO?state.meteo.depCondIcao:state.meteo.arrCondIcao)||icao).toUpperCase();
+  const sub=isTO?state.meteo.depCondSub:state.meteo.arrCondSub;
+  const dist=isTO?state.meteo.depCondDist:state.meteo.arrCondDist;
+  const src=hasMetar?('METAR '+esc(condIcao)+(sub?(' · station la plus proche (~'+dist+' NM)'):'')):'onglet Météo';
   const r=computePerf();
   return `<div class="card"><h2>Conditions ${isTO?'décollage':'atterrissage'}</h2>
     <div class="kv"><span class="k">OAT / QNH</span><span class="v">${oat} °C / ${qnh} hPa</span></div>
     <div class="kv"><span class="k">Vent</span><span class="v">${wdir} / ${wspd}</span></div>
     <div class="kv"><span class="k">Source météo</span><span class="v"><span class="muted" style="font-weight:600">${src}</span></span></div>
+    ${(hasMetar&&sub)?`<div class="note" style="margin-top:2px;color:#b7791f">${esc(icao||'Terrain')} sans METAR — perfos basées sur ${esc(condIcao)} (station la plus proche, ~${dist} NM).</div>`:''}
     ${isTO?`<div class="kv"><span class="k">Masse au décollage</span><span class="v">${fmt(r.wb.mass)} kg</span></div>`
       :`<div class="kv"><span class="k">Masse à l'atterrissage (prévue)</span><span class="v" id="perfLandMass">${fmt(predLandingMass())} kg</span></div>
         <div class="note" style="margin-top:2px">Estimée : GS moyenne 105 kt · conso 35 L/h · mise à jour en temps réel.</div>`}
