@@ -730,9 +730,10 @@ function b23Emerg(){
       emptyMass:450.5, emptyArm:1.730, maxWeight:750,
       fuel:{ fullL:118, fullKg:85, unusableL:2, arm:1.600, perWingMaxL:59 },
       stations:[
-        { id:"front", label:"Pilote + passager",          arm:2.085 },
-        { id:"rear",  label:"Bagages soute arrière",        arm:2.520, max:15 },
-        { id:"bag",   label:"Bagages coffres d'ailes",      arm:2.025, max:40 }
+        { id:"bag",   label:"Bagages coffres d'ailes",  arm:2.025, max:40 },
+        { id:"front", label:"Pilote / passager",        arm:2.085 },
+        { id:"rear",  label:"Bagages bas (soute)",       arm:2.520, max:15 },
+        { id:"bag2",  label:"Bagages haut (soute)",      arm:2.800, max:1 }
       ],
       envelope:[ [1.713,440],[1.713,600],[1.793,750],[1.840,750],[1.800,440] ],
       envelopeAxis:{ armMin:1.66, armMax:1.88, massMin:400, massMax:800 }
@@ -766,7 +767,7 @@ function defaultState(){
   const pw=AIRCRAFT_PROFILES["F-GRLA"].wb.fuel.perWingMaxL;
   return { acft:"F-GRLA",
     meteo:{ dep:"", arr:"", windDir:"", windSpd:"", temp:"", qnh:"1013", rawDep:"", rawArr:"", tafDep:"", tafArr:"", nearbyDep:[], nearbyArr:[], depM:null, arrM:null, corridor:[], depCond:null, arrCond:null, depCondIcao:"", arrCondIcao:"", depCondSub:false, arrCondSub:false, depCondDist:null, arrCondDist:null },
-    wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, fuelLeft:null, fuelRight:null },
+    wb:{ emptyMass:null, emptyArm:null, front:null, rear:null, bag:null, bag2:null, fuelLeft:null, fuelRight:null },
     perf:{ mode:"estim", to:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""}, ldg:{icao:"",qfu:"",surface:"Sèche/Dur",dist:"",man:""} },
     fuelMgmt:{ active:false, sel:null, left:null, right:null, lastChronoMs:0, prompted:false, lowPrompted:false },
     chrono:{ offBlock:null, takeOff:null, landing:null, onBlock:null },
@@ -805,19 +806,15 @@ document.getElementById("bordBtn").onclick=()=>{ currentTab="home"; render(); };
 function wbInputs(){
   const w=state.wb,p=P().wb;
   return { emptyMass:num(w.emptyMass,p.emptyMass), emptyArm:num(w.emptyArm,p.emptyArm),
-    front:num(w.front,0), rear:num(w.rear,0), bag:num(w.bag,0),
+    front:num(w.front,0), rear:num(w.rear,0), bag:num(w.bag,0), bag2:num(w.bag2,0),
     fuelLeft:num(w.fuelLeft,0), fuelRight:num(w.fuelRight,0) };
 }
 function computeWB(){
   const p=P().wb,i=wbInputs();
   const fuelL=i.fuelLeft+i.fuelRight, fuelKg=fuelL*P().fuelDensity;
-  const items=[
-    {label:"Masse à vide",mass:i.emptyMass,arm:i.emptyArm},
-    {label:p.stations[0].label,mass:i.front,arm:p.stations[0].arm},
-    {label:p.stations[1].label,mass:i.rear,arm:p.stations[1].arm},
-    {label:p.stations[2].label,mass:i.bag,arm:p.stations[2].arm},
-    {label:"Carburant",mass:fuelKg,arm:p.fuel.arm}
-  ];
+  const items=[{label:"Masse à vide",mass:i.emptyMass,arm:i.emptyArm}];
+  p.stations.forEach(s=>items.push({label:s.label,mass:num(i[s.id],0),arm:s.arm}));
+  items.push({label:"Carburant",mass:fuelKg,arm:p.fuel.arm});
   let mass=0,moment=0; items.forEach(it=>{mass+=it.mass;moment+=it.mass*it.arm;});
   const cg=mass>0?moment/mass:0;
   const zfMass=mass-fuelKg, zfMoment=moment-fuelKg*p.fuel.arm, zfCG=zfMass>0?zfMoment/zfMass:0;
@@ -1236,8 +1233,7 @@ function renderWB(){
     <div class="note" style="margin-top:6px">Sièges / bagages en <b>kg</b>. Carburant par aile en <b>litres</b> (densité ${P().fuelDensity} kg/L).</div></div>
   <div class="card"><h2>Saisie</h2>
     <div class="grid2">
-      ${seatBtn("front",p.stations[0].label,i.front)}${seatBtn("rear",p.stations[1].label,i.rear)}
-      ${seatBtn("bag",p.stations[2].label,i.bag)}
+      ${p.stations.map(s=>seatBtn(s.id,s.label,i[s.id])).join("")}
       <div class="seatbtn" style="cursor:default"><span class="lbl">Carburant total</span><span class="val">${fmt(fuelTot)} L</span></div>
     </div>
     <div class="grid2" style="margin-top:10px">
@@ -1255,7 +1251,7 @@ function renderWB(){
     <div class="kv"><span class="k">Masse totale (décollage)</span><span class="v" style="${overMax?'color:var(--danger)':''}">${fmt(r.mass)} / ${r.maxWeight} kg</span></div>
     <div class="kv"><span class="k">Centre de gravité</span><span class="v">${r.cg.toFixed(3)} m</span></div>
     <div style="text-align:center;margin-top:14px">
-      ${(i.front+i.rear+i.bag+i.fuelLeft+i.fuelRight)<=0
+      ${(i.front+i.rear+i.bag+i.bag2+i.fuelLeft+i.fuelRight)<=0
         ? `<span class="pill warn" style="font-size:14px;padding:8px 16px">En attente de saisie de la charge</span>`
         : (valid?`<span class="pill ok" style="font-size:15px;padding:8px 16px">DANS L'ENVELOPPE</span>`
                 :`<span class="pill bad flash" style="font-size:16px;padding:10px 18px">HORS ENVELOPPE / VOL INTERDIT</span>`)}</div></div>
@@ -1298,11 +1294,12 @@ function planeSVG(i){
 function planeSVGb23(i,zone,kg,L){
   return `<div style="position:relative;width:100%;max-width:560px;margin:4px auto 2px">`
     +`<img src="${PLANE_IMG_B23}" alt="Vue de dessus Bristell B23" style="width:100%;display:block;border-radius:14px;background:#fff">`
-    +zone('fuelL',25,27,12,9,L(i.fuelLeft),i.fuelLeft>0)
-    +zone('fuelR',63,27,12,9,L(i.fuelRight),i.fuelRight>0)
-    +zone('front',43,30,14,13,kg(i.front),i.front>0)
-    +zone('rear',45,45,11,8,kg(i.rear),i.rear>0)
-    +zone('bag',45,54,11,7,kg(i.bag),i.bag>0)
+    +zone('fuelL',24,27,13,9,L(i.fuelLeft),i.fuelLeft>0)
+    +zone('fuelR',63,27,13,9,L(i.fuelRight),i.fuelRight>0)
+    +zone('bag',42,22,16,7,kg(i.bag),i.bag>0)         /* coffres ailes 2.025 — le plus avant */
+    +zone('front',42,31,16,12,kg(i.front),i.front>0)  /* pilote/pax 2.085 */
+    +zone('rear',44,46,12,6,kg(i.rear),i.rear>0)      /* soute bas 2.52 */
+    +zone('bag2',44,53,12,6,kg(i.bag2),i.bag2>0)      /* soute haut 2.8 */
     +`</div>`;
 }
 
@@ -1609,12 +1606,14 @@ function envelopeSVG(r){
 }
 /* ---- PAVÉ NUMÉRIQUE ---- */
 const kp=document.getElementById("keypad"); let kpVal="";
-const KP_FIELD={front:"front",rear:"rear",bag:"bag",fuelL:"fuelLeft",fuelR:"fuelRight"};
+const KP_FIELD={front:"front",rear:"rear",bag:"bag",bag2:"bag2",fuelL:"fuelLeft",fuelR:"fuelRight"};
 function openKeypad(target){
   kpTarget=target;
   const isFuel=(target==="fuelL"||target==="fuelR");
   const c=state.wb[KP_FIELD[target]]; kpVal=(c!=null&&c!=="")?String(c):"";
-  document.getElementById("kpTitle").textContent={front:"Équipage avant",rear:"Passagers arrière",bag:"Bagages / soute",fuelL:"Réservoir gauche",fuelR:"Réservoir droit"}[target];
+  const stn=(P().wb.stations||[]).find(s=>s.id===target);
+  const title=isFuel?(target==="fuelL"?"Réservoir gauche":"Réservoir droit"):(stn?stn.label:target);
+  document.getElementById("kpTitle").textContent=title;
   document.getElementById("kpUnit").textContent=isFuel?"litres (L)":"kilogrammes (kg)";
   document.getElementById("kpDisp").textContent=kpVal||"0";
   kp.classList.remove("hide");
