@@ -876,7 +876,9 @@ function segDevis(active){
     +`<button class="seg-b ${active==='perf'?'on':''} ${dis?'dis':''}" onclick="goTab('perf')">&#128200; Performances</button>`
     +`</div>`;
 }
+let _lastTab=null;
 function render(){
+  const sameTab=(currentTab===_lastTab), prevScroll=main.scrollTop;
   lockPerfTab(!wbValid());
   autoLegs();
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x.dataset.tab===currentTab));
@@ -892,7 +894,8 @@ function render(){
   else if(currentTab==="card") renderCard();
   else if(currentTab==="settings") renderSettings();
   else if(currentTab==="archive") renderArchive();
-  main.scrollTop=0;
+  main.scrollTop = sameTab ? prevScroll : 0;
+  _lastTab=currentTab;
 }
 const ARROW_SVG='<svg viewBox="0 0 100 100" width="46" height="46"><path d="M50 12 L86 78 L50 64 L14 78 Z" fill="#7db1d8"/><circle cx="50" cy="88" r="6" fill="#7db1d8"/></svg>';
 function renderHome(){
